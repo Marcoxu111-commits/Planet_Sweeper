@@ -13,12 +13,20 @@
   <div class="hud">
     <h1>PJJ-2 <span>v1 — North America</span></h1>
     <p>Faded heat map over satellite imagery. Every North American city — 2,646 US urban areas + 1,030 Canadian population centres. Sample litter density (t/km²), hover for details.</p>
-    <p class="hint">The <strong>GTA</strong> gets ward-level detail: zoom into <strong>Toronto</strong> or <strong>Markham</strong>.</p>
+    <p class="hint">GTA: 25 municipal regions, plus Toronto and Markham wards. Areas without litter reports use labeled estimates.</p>
     <div class="legend">
       <span id="legend-min">Low</span>
       <div class="gradient" id="legend-gradient"></div>
       <span id="legend-max">High</span>
     </div>
+    <form id="city-search" role="search" autocomplete="off">
+      <label for="city-query">Find a city</label>
+      <input id="city-query" type="search" placeholder="Toronto, Mississauga, New York…"
+        role="combobox" aria-autocomplete="list" aria-expanded="false"
+        aria-controls="city-results" spellcheck="false" />
+      <ul id="city-results" role="listbox" aria-label="Matching cities" hidden></ul>
+      <span id="city-search-status" class="sr-only" role="status" aria-live="polite"></span>
+    </form>
   </div>
 
   <div id="category-panel">
@@ -28,7 +36,7 @@
         <span class="cat-swatch land"></span>
         <span class="cat-text">
           <span class="cat-name">Waste pollution</span>
-          <span class="cat-desc">Land litter &amp; illegal dumping. Real 311 reports per km², green = low to red = high.</span>
+          <span class="cat-desc">Litter reports per km²: real 311 data where available, modeled elsewhere. Yellow = low, red = high.</span>
         </span>
       </button>
       <button class="cat-option" data-cat="water">
@@ -62,9 +70,11 @@
   <script src="data/ca_cities.js"></script>
   <script src="data/toronto_wards.js"></script>
   <script src="data/markham_wards.js"></script>
+  <script src="data/gta_regions.js"></script>
   <script src="data/lakes.js"></script>
   <script src="data/coastal_areas.js"></script>
   <script src="data/real_litter.js"></script>
   <script src="app.js"></script>
+  <script src="search.js"></script>
 </body>
 </html>

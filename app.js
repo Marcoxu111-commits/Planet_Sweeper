@@ -225,6 +225,7 @@ const canvasRenderer = L.canvas({ padding: 0.3 });
 const cityLayer = L.layerGroup();       // land polygons
 const airCityLayer = L.layerGroup();    // air: near-invisible click targets
 const lakesLayer = L.layerGroup();      // water polygons
+const gtaWasteLayer = L.layerGroup();  // all 25 GTA municipalities
 const landWardLayers = { Toronto: L.layerGroup(), Markham: L.layerGroup() };
 const airWardLayers = { Toronto: L.layerGroup(), Markham: L.layerGroup() };
 const heatPoints = [];                  // land glow: [lat, lng, intensity, areaKm2]
@@ -493,6 +494,28 @@ function buildCoastBands() {
   coastBandLayers = [gradient, outline];
 }
 
+// Official municipal boundaries and Census 2021 populations. Do not present
+// modeled regional estimates as newly collected litter reports.
+(window.PJJ_GTA_REGIONS?.features || []).forEach((feature) => {
+  const p = feature.properties;
+  const real = realLandFor(p.name, "CA", p.population, p.areaKm2);
+  const metric = real ? real.metric : modeledLandMetric(p.name, p.population, p.areaKm2);
+  const style = () => baseStyleLand(metric);
+  const layer = L.geoJSON(feature, { style });
+  layer.bindTooltip(`<strong>${p.name}</strong><br>${metric.toFixed(1)} reports/km²/yr<br>${real ? "Real 311 reports" : "Modeled regional estimate"}`, {
+    sticky: true, className: "pjj-tip",
+  });
+  layer.on("mouseover", () => layer.setStyle({ ...style(), color: "#fff", weight: 2 }));
+  layer.on("mouseout", () => layer.setStyle(style()));
+  layer.on("click", () => showPanel({
+    name: p.name, sub: "Greater Toronto Area — municipal region",
+    metric, areaKm2: p.areaKm2, population: p.population,
+    real: !!real, reports: real?.reports, period: real?.period,
+    source: real ? real.source : "Modeled from Census 2021 population density; official Ontario municipal boundaries. No municipal litter-report dataset is available in this map.",
+  }));
+  gtaWasteLayer.addLayer(layer);
+});
+
 // ---------- Wards (GTA detail, land + air categories) ----------
 (window.PJJ_TORONTO_WARDS.features || []).forEach((f) => {
   const p = f.properties;
@@ -587,6 +610,9 @@ function heatRadiusPx(km2, mpp, mult, maxPx) {
 function buildGlow(points, gradient, areaMult, maxOpacity) {
   if (typeof L.heatLayer !== "function") return;
   const zoom = map.getZoom();
+  // Point kernels become enormous disks at street/city zoom. At detail levels,
+  // use the actual region polygons instead of painting circular heat kernels.
+  if (zoom >= DETAIL_ZOOM - 1) return;
   const mpp = (156543.03392 * Math.cos((map.getCenter().lat * Math.PI) / 180)) / Math.pow(2, zoom);
   const isAir = CATEGORY === "air";
   const buckets = { small: [], medium: [], large: [] };
@@ -617,7 +643,10 @@ function buildGlow(points, gradient, areaMult, maxOpacity) {
     });
     heatLayers.push(layer);
     map.addLayer(layer);
-    if (layer._canvas) layer._canvas.style.pointerEvents = "none";
+    if (layer._canvas) {
+      layer._canvas.style.pointerEvents = "none";
+      layer._canvas.style.opacity = zoom >= DETAIL_ZOOM - 2 ? "0.4" : "1";
+    }
   });
 }
 
@@ -635,7 +664,6 @@ function rebuildGlows() {
   if (CATEGORY === "land") buildGlow(heatPoints, LAND_GRADIENT, 1.15, maxOpacityForZoom(map.getZoom()));
   if (CATEGORY === "air") buildGlow(airPoints.concat(airWardPoints), AIR_GRADIENT, 1.6, 0.35);
 }
-map.on("zoomend", rebuildGlows);
 
 // ---------- Category switching ----------
 const legendMin = document.getElementById("legend-min");
@@ -666,7 +694,7 @@ function setCategory(cat) {
 
 function applyCategory() {
   // remove everything category-specific
-  [cityLayer, lakesLayer, airCityLayer,
+  [cityLayer, lakesLayer, airCityLayer, gtaWasteLayer,
     landWardLayers.Toronto, landWardLayers.Markham,
     airWardLayers.Toronto, airWardLayers.Markham].forEach((l) => map.removeLayer(l));
   coastBandLayers.forEach((l) => map.removeLayer(l));
@@ -675,26 +703,24 @@ function applyCategory() {
   rebuildGlows();
 
   const zoomed = map.getZoom() >= DETAIL_ZOOM;
-  const c = map.getCenter();
-  const inGTA = Math.abs(c.lat - 43.75) < 1.0 && Math.abs(c.lng - -79.4) < 1.4;
-
   if (CATEGORY === "land") {
-    if (zoomed && inGTA) {
+    // Keep surrounding city coverage; detail layers are overlays, not a
+    // replacement for all city data inside a broad GTA bounding box.
+    map.addLayer(cityLayer);
+    if (map.getZoom() >= DETAIL_ZOOM - 1) map.addLayer(gtaWasteLayer);
+    if (zoomed) {
       map.addLayer(landWardLayers.Toronto);
       map.addLayer(landWardLayers.Markham);
-    } else {
-      map.addLayer(cityLayer);
     }
   } else if (CATEGORY === "water") {
     if (!coastBandLayers.length) buildCoastBands();
     coastBandLayers.forEach((l) => map.addLayer(l));
     map.addLayer(lakesLayer); // lakes on top of the sea-side coastal bands
   } else if (CATEGORY === "air") {
-    if (zoomed && inGTA) {
+    map.addLayer(airCityLayer);
+    if (zoomed) {
       map.addLayer(airWardLayers.Toronto);
       map.addLayer(airWardLayers.Markham);
-    } else {
-      map.addLayer(airCityLayer);
     }
   }
 }
