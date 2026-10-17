@@ -15,6 +15,7 @@
     entries.push({ feature, name, region, key, normalizedName: normalize(name) });
   }
   (window.PJJ_GTA_REGIONS?.features || []).forEach((f) => add(f, f.properties.name, "Ontario, Canada"));
+  (window.PJJ_GTA_DETAIL?.features || []).forEach((f) => add(f, f.properties.name, `${f.properties.city}, Ontario, Canada`));
   (window.PJJ_TORONTO_DISTRICTS?.features || []).forEach((f) => add(f, f.properties.name, "Toronto district, Ontario, Canada"));
   (window.PJJ_TORONTO_WARDS?.features || []).forEach((f) => add(f, f.properties.AREA_NAME, `Toronto ward ${f.properties.AREA_SHORT_CODE}, Ontario, Canada`));
   (window.PJJ_CA_CITIES?.features || []).forEach((f) => {

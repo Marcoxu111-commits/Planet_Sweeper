@@ -11,6 +11,7 @@ Run `node serve.js` and open `http://localhost:5173` (no build step or dependenc
 - **Basemap**: Esri World Imagery satellite tiles
 - **Heat scale**: yellow → red polygons (log-scaled reports/km²/yr); haze only at overview zooms
 - **GTA detail**: 25 municipal regions, plus Toronto wards at zoom ≥ 9. Markham stays one municipal region, not separate wards.
+- **Expanded GTA wards**: 44 additional official wards in Mississauga, Brampton, Vaughan, Richmond Hill, Oshawa, and Oakville appear at zoom ≥ 9 and are searchable. These new ward populations are area-allocated estimates from municipal Census 2021 totals, not measured ward counts; waste values are modeled. Geometry is clipped to municipal land boundaries.
 - **City search**: Toronto's six former municipalities (Old Toronto, Etobicoke, York, North York, East York, Scarborough) and all 25 Toronto wards are searchable alongside cities.
 - **Panels**: city/initiatives, pollution layers, and region details can be minimized independently. Region details occupy the top-right panel rail, separate from the bottom-right layer controls.
   - Toronto wards use **real ward-level 311 report counts**
@@ -33,6 +34,19 @@ Run `node serve.js` and open `http://localhost:5173` (no build step or dependenc
 Regions without published 311/open litter data are labeled **modeled estimate** —
 modeled from the real population density of each boundary, not real litter counts.
 
+## Water layers
+
+The continuous coastal gradient is unchanged. Its 148 analysis regions are now
+clickable, with very faint boundaries. Region details show the modeled index at
+the clicked point, sea-region area, coordinates, and provenance. These are
+illustrative map-analysis regions, not official water-management boundaries or
+live water samples. Region area is calculated from the displayed geometry.
+
+Lakes now use a world-aligned gradient clipped to each lake's polygon, with their
+white outlines and click details retained. In-lake colour variation is visual,
+not spatially measured water quality; the popup retains the lake's single index
+and explicitly explains this. No blur is applied outside lake boundaries.
+
 ## Initiative system (local prototype)
 
 1. Find a city or Toronto district, then select **Set as your city**.
@@ -51,6 +65,8 @@ messages are stored in this browser's `localStorage`, not sent to other voluntee
 They survive reloads on the same origin, but will not appear on another device or
 domain. Matching tabs on the same browser/origin refresh through storage events.
 Display names are not verified identities. The interface labels these limits.
+Saved and draft hotspot pins use the same teal/emerald teardrop shape; a dashed
+white border distinguishes a draggable draft.
 
 For a public launch, add authenticated accounts, a shared database with geographic
 queries, private photo storage, server-enforced membership/capacity permissions,

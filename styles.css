@@ -461,7 +461,14 @@ body {
 .chat-messages article:last-child { border: 0; }
 .chat-messages time { display: block; margin-top: 3px; color: #9aafbb; font-size: 10px; }
 .chat-messages p { margin: 5px 0; }
-.initiative-pin { background: #ffd34c; border: 2px solid #fff; border-radius: 18px 18px 18px 4px; box-shadow: 0 3px 8px #0008; text-align: center; font-size: 22px; line-height: 34px; }
+.initiative-pin {
+  background: linear-gradient(145deg, #36d4b2, #087f79); border: 2px solid #f0fffb;
+  border-radius: 18px 18px 18px 4px; color: #fff;
+  box-shadow: 0 3px 10px #032c3180, inset 0 1px 2px #ffffff55;
+  display: grid; place-items: center;
+}
+.initiative-pin-symbol { display: grid; place-items: center; width: 25px; height: 25px; border-radius: 50%; background: #ffffff24; font-size: 24px; line-height: 1; text-shadow: 0 1px 2px #045e5b80; }
+.initiative-pin-draft { border-style: dashed; }
 @media (pointer: fine) {
   .report-picking, .report-picking .leaflet-interactive, .report-picking.leaflet-grab { cursor: crosshair; }
   .report-picking .leaflet-control { cursor: auto; }

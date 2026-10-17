@@ -13,6 +13,11 @@
     state.origin = { ...initialCity.center, label: initialCity.name };
   }
   const addressCache = new Map();
+  const hotspotIcon = (draft = false) => L.divIcon({
+    className: `initiative-pin${draft ? " initiative-pin-draft" : ""}`,
+    html: '<span class="initiative-pin-symbol" aria-hidden="true">✦</span>',
+    iconSize: [34, 42], iconAnchor: [17, 40], tooltipAnchor: [0, -38],
+  });
   const uuid = () => crypto.randomUUID();
   try {
     profile = JSON.parse(localStorage.getItem(profileKey) || "null") || { id: uuid(), name: "" };
@@ -84,7 +89,7 @@
     }
     state.draft = location;
     if (state.marker) map.removeLayer(state.marker);
-    state.marker = L.marker(latlng, { draggable: true, title: "Hotspot location — drag to adjust" }).addTo(map);
+    state.marker = L.marker(latlng, { draggable: true, title: "Hotspot location — drag to adjust", icon: hotspotIcon(true) }).addTo(map);
     state.marker.on("dragend", () => {
       const ll = state.marker.getLatLng();
       state.draft = { lat: ll.lat, lng: ll.lng, label: "Adjusted map location" };
@@ -319,7 +324,7 @@
     store.load().forEach((report) => {
       const marker = L.marker([report.location.lat, report.location.lng], {
         title: report.title,
-        icon: L.divIcon({ className: "initiative-pin", html: '<span aria-hidden="true">＋</span>', iconSize: [34, 42], iconAnchor: [17, 40] }),
+        icon: hotspotIcon(),
       });
       const label = document.createElement("span"); label.textContent = report.title;
       marker.bindTooltip(label);

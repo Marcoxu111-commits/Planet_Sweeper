@@ -184,7 +184,7 @@ function showPanel(d) {
   let rows = "";
   if (CATEGORY === "water") {
     rows = `
-      <div class="row"><span>Pollution index</span><strong>${d.metric.toFixed(0)} / 100</strong></div>
+      <div class="row"><span>${d.indexLabel || "Pollution index"}</span><strong>${d.metric.toFixed(0)} / 100</strong></div>
       <div class="row"><span>Area</span><strong>${d.areaKm2.toFixed(0)} km²</strong></div>`;
   } else if (CATEGORY === "air") {
     rows = `
@@ -200,7 +200,7 @@ function showPanel(d) {
       <div class="row"><span>Area</span><strong>${d.areaKm2.toFixed(1)} km²</strong></div>`;
   }
   const dataBadge = CATEGORY === "water"
-    ? `<div class="row estrow"><span>Data</span><strong>Curated index — see source</strong></div>`
+    ? `<div class="row estrow"><span>Data</span><strong>${d.waterDataLabel || "Modeled estimate"}</strong></div>`
     : d.real
       ? `<div class="row real"><span>Data</span><strong>Real 311 reports &middot; ${d.period}</strong></div>`
       : `<div class="row estrow"><span>Data</span><strong>Modeled estimate</strong></div>`;
@@ -229,6 +229,7 @@ const cityLayer = L.layerGroup();       // land polygons
 const airCityLayer = L.layerGroup();    // air: near-invisible click targets
 const lakesLayer = L.layerGroup();      // water polygons
 const gtaWasteLayer = L.layerGroup();  // all 25 GTA municipalities
+const gtaDetailLayer = L.layerGroup(); // additional ward detail; Markham is unsplit
 const landWardLayers = { Toronto: L.layerGroup() };
 const airWardLayers = { Toronto: L.layerGroup() };
 const markhamAirLayer = L.layerGroup(); // one municipal region, no ward splits
@@ -358,23 +359,32 @@ function severityLabelAir(metric) {
 }
 
 // ---------- Lakes (water category) ----------
-(window.PJJ_LAKES.features || []).forEach((f) => {
+// The source repeats seven complete lake outlines. Rendering both would double
+// the gradient opacity, so use one outline per named lake.
+const waterLakeFeatures = [...new Map((window.PJJ_LAKES.features || []).map((feature) => [feature.properties.NAME, feature])).values()];
+waterLakeFeatures.forEach((f) => {
   const p = f.properties;
-  const areaKm2 = p.AREA || p.Shape__Area / 1e6;
+  // The source's AREA column is in square miles, not km². Measure the displayed
+  // geographic polygon instead of relabeling those values as square kilometres.
+  const areaKm2 = PlanetWater.areaKm2(f.geometry);
   const idx = lakeIndex(p.NAME);
-  const poly = L.geoJSON(f, { style: () => baseStyleWater(idx) }).getLayers()[0];
+  // The gradient supplies the fill. Keep these paths as outlines/click targets.
+  const lakeStyle = () => ({ ...baseStyleWater(idx), fillOpacity: 0 });
+  const poly = L.geoJSON(f, { style: lakeStyle }).getLayers()[0];
   poly.bindTooltip(
     `<strong>${p.NAME}</strong><br>` +
       `Pollution index: <strong>${idx}/100</strong> — ${severityLabelWater(idx)}`,
     { sticky: true, className: "pjj-tip" }
   );
-  poly.on("mouseover", () => poly.setStyle({ ...baseStyleWater(idx), stroke: true, color: "#fff", weight: 2, fillOpacity: 0.92 }).bringToFront());
-  poly.on("mouseout", () => poly.setStyle(baseStyleWater(idx)));
+  poly.on("mouseover", () => poly.setStyle({ ...lakeStyle(), color: "#fff", weight: 2 }).bringToFront());
+  poly.on("mouseout", () => poly.setStyle(lakeStyle()));
   poly.on("click", () => {
     setCategory("water");
     showPanel({
       name: p.NAME, sub: "Major North American lake", metric: idx, areaKm2,
       population: null, real: false,
+      waterDataLabel: LAKE_POLLUTION[p.NAME] != null ? "Curated illustrative index" : "Modeled lake index",
+      extra: "Within-lake colour variation is illustrative, not location-specific water sampling. The index is not a measured contaminant concentration.",
       source: LAKE_POLLUTION[p.NAME] != null
         ? "Index anchored to documented water quality (EPA / DFO / news-documented status)"
         : "Modeled index (no curated water-quality data)",
@@ -385,6 +395,7 @@ function severityLabelAir(metric) {
 
 // ---------- Water: coastal bands (sea only, no inland color) ----------
 let coastBandLayers = [];
+let lakeGradientLayer = null;
 
 const COAST_HOTSPOTS = [
   [29.0, -92.0, 0.95, 800], [27.5, -81.5, 0.75, 600], [37.3, -76.8, 0.8, 400],
@@ -480,6 +491,53 @@ const CoastalGradient = L.GridLayer.extend({
   },
 });
 
+// A world-aligned gradient for each lake, clipped to its exact polygon. Unlike
+// a heat kernel, this cannot add a circular glow or blur onto neighbouring land.
+const lakeGradientFeatures = waterLakeFeatures.map((feature) => ({
+  feature, box: PlanetWater.bounds(feature.geometry), index: lakeIndex(feature.properties.NAME),
+}));
+const LakeGradient = L.GridLayer.extend({
+  createTile(coords) {
+    const size = this.getTileSize().x;
+    const tile = document.createElement("canvas");
+    tile.width = tile.height = size;
+    const ctx = tile.getContext("2d");
+    const origin = L.point(coords.x * size, coords.y * size);
+    ctx.globalAlpha = 0.72;
+    for (const { feature, box, index } of lakeGradientFeatures) {
+      const nw = map.project([box[3], box[0]], coords.z).subtract(origin);
+      const se = map.project([box[1], box[2]], coords.z).subtract(origin);
+      if (se.x < 0 || nw.x > size || se.y < 0 || nw.y > size) continue;
+      const gradient = ctx.createLinearGradient(nw.x, nw.y, se.x, se.y);
+      for (const [position, variation] of [[0, -0.12], [0.5, 0], [1, 0.1]]) {
+        gradient.addColorStop(position, `rgb(${coastRGB(index / 100 + variation).join(",")})`);
+      }
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      for (const polygon of PlanetWater.polygons(feature.geometry)) {
+        for (const ring of polygon) {
+          ring.forEach(([lng, lat], i) => {
+            const point = map.project([lat, lng], coords.z).subtract(origin);
+            if (i === 0) ctx.moveTo(point.x, point.y); else ctx.lineTo(point.x, point.y);
+          });
+          ctx.closePath();
+        }
+      }
+      ctx.fill("evenodd");
+    }
+    return tile;
+  },
+});
+
+function buildLakeGradient() {
+  if (lakeGradientLayer) return;
+  const pane = map.createPane("lakeGradient");
+  pane.style.zIndex = 391;
+  pane.style.pointerEvents = "none";
+  lakeGradientLayer = new LakeGradient({ pane: "lakeGradient", noWrap: true, tileSize: 256, updateWhenIdle: true });
+  lakesLayer.addLayer(lakeGradientLayer);
+}
+
 function buildCoastBands() {
   if (!window.PJJ_COAST_MASK) return;
   if (!map.getPane("coastalGradient")) {
@@ -492,10 +550,30 @@ function buildCoastBands() {
     noWrap: true, updateWhenIdle: true,
   });
   const outline = L.geoJSON(window.PJJ_COAST_MASK, {
-    style: () => ({ ...baseStyleWater(0), fill: false, smoothFactor: 0.6, lineJoin: "round" }),
+    style: () => ({ ...baseStyleWater(0), fill: false, smoothFactor: 0.6, lineJoin: "round", interactive: false }),
+    interactive: false,
   });
-  outline.bindTooltip("Coastal water pollution — modeled estimate", { sticky: true, className: "pjj-tip" });
-  coastBandLayers = [gradient, outline];
+  let regionIndex = 0;
+  const regions = L.geoJSON(window.PJJ_COAST_AREAS, {
+    style: () => ({ renderer: canvasRenderer, color: "#fff", opacity: 0.045, weight: 0.6, fill: true, fillOpacity: 0, smoothFactor: 0.6 }),
+    onEachFeature(feature, layer) {
+      const seed = feature.properties.seed;
+      const name = PlanetWater.regionName(seed, regionIndex++);
+      const areaKm2 = PlanetWater.areaKm2(feature.geometry);
+      layer.bindTooltip(`<strong>${name}</strong><br>Click for modeled water-pollution data`, { sticky: true, className: "pjj-tip" });
+      layer.on("click", (event) => {
+        const point = event.latlng || L.latLng(seed[1], seed[0]);
+        showPanel({
+          name, sub: "Coastal water region · up to 130 km offshore",
+          metric: coastStrength(point.lat, point.lng) * 100, indexLabel: "Index at selected point",
+          areaKm2, population: null, real: false, waterDataLabel: "Modeled coastal index",
+          extra: `Selected point: ${point.lat.toFixed(4)}, ${point.lng.toFixed(4)}. This illustrative index matches the colour model, not measured water samples. Region boundaries are map-analysis areas, not official water-management districts.`,
+          source: "Geometry: Natural Earth coastline, buffered and clipped to sea only. Index: modeled hotspot proximity and regional variation; no live water-quality measurements are available.",
+        });
+      });
+    },
+  });
+  coastBandLayers = [gradient, outline, regions];
 }
 
 // Official municipal boundaries and Census 2021 populations. Do not present
@@ -531,6 +609,24 @@ function buildCoastBands() {
     }));
     markhamAirLayer.addLayer(airLayer);
   }
+});
+
+// More detail across Peel, York, Durham, and Halton. These are official ward
+// shapes but their population allocation and waste values are clearly modeled.
+(window.PJJ_GTA_DETAIL?.features || []).forEach((feature) => {
+  const p = feature.properties;
+  const metric = modeledLandMetric(p.name, p.population, p.areaKm2);
+  const style = () => baseStyleLand(metric);
+  const layer = L.geoJSON(feature, { style });
+  layer.bindTooltip(`<strong>${p.name}</strong><br>${metric.toFixed(1)} reports/km²/yr — modeled estimate`, { sticky: true, className: "pjj-tip" });
+  layer.on("mouseover", () => layer.setStyle({ ...style(), color: "#fff", weight: 1.5 }));
+  layer.on("mouseout", () => layer.setStyle(style()));
+  layer.on("click", () => showPanel({
+    name: p.name, sub: `${p.city} — municipal ward`, metric,
+    areaKm2: p.areaKm2, population: p.population, popEstimated: true, real: false,
+    source: `Modeled waste estimate, not local litter counts. Population allocated from Census 2021 municipal totals by ward area; not measured ward populations. Boundary source: ${p.source}`,
+  }));
+  gtaDetailLayer.addLayer(layer);
 });
 
 // ---------- Wards (GTA detail, land + air categories) ----------
@@ -701,7 +797,7 @@ function setCategory(cat) {
 
 function applyCategory() {
   // remove everything category-specific
-  [cityLayer, lakesLayer, airCityLayer, gtaWasteLayer, markhamAirLayer,
+  [cityLayer, lakesLayer, airCityLayer, gtaWasteLayer, gtaDetailLayer, markhamAirLayer,
     landWardLayers.Toronto, airWardLayers.Toronto].forEach((l) => map.removeLayer(l));
   coastBandLayers.forEach((l) => map.removeLayer(l));
   heatLayers.forEach((l) => map.removeLayer(l));
@@ -715,9 +811,11 @@ function applyCategory() {
     map.addLayer(cityLayer);
     if (map.getZoom() >= DETAIL_ZOOM - 1) map.addLayer(gtaWasteLayer);
     if (zoomed) {
+      map.addLayer(gtaDetailLayer);
       map.addLayer(landWardLayers.Toronto);
     }
   } else if (CATEGORY === "water") {
+    buildLakeGradient();
     if (!coastBandLayers.length) buildCoastBands();
     coastBandLayers.forEach((l) => map.addLayer(l));
     map.addLayer(lakesLayer); // lakes on top of the sea-side coastal bands
