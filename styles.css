@@ -64,11 +64,11 @@ body {
   border-radius: 6px;
   background: linear-gradient(
     to right,
-    hsl(120, 92%, 48%),
-    hsl(82, 92%, 48%),
-    hsl(60, 92%, 50%),
-    hsl(24, 92%, 48%),
-    hsl(0, 92%, 46%)
+    hsl(52, 95%, 52%),
+    hsl(40, 95%, 50%),
+    hsl(28, 95%, 48%),
+    hsl(14, 95%, 46%),
+    hsl(0, 95%, 44%)
   );
   border: 1px solid #999;
 }
@@ -154,15 +154,15 @@ body {
 }
 
 .cat-swatch.land {
-  background: linear-gradient(135deg, #00c853, #ffd600, #d50000);
+  background: linear-gradient(135deg, #ffd600, #ff8f00, #d50000);
 }
 
 .cat-swatch.water {
-  background: linear-gradient(135deg, #0d1e6e, #5b2a86, #800000);
+  background: linear-gradient(135deg, #2bb8d8, #f3cf52, #f2a63a, #e05236, #c62828);
 }
 
 .cat-swatch.air {
-  background: linear-gradient(135deg, rgba(255, 235, 0, 0.05), #ffe100, #ff9600);
+  background: linear-gradient(135deg, rgba(255, 235, 0, 0.05), #ffe100, #ff9600, #ff3d00);
 }
 
 .cat-text {
@@ -218,15 +218,15 @@ body {
 }
 
 .cat-swatch.land {
-  background: linear-gradient(135deg, #00c853, #ffd600, #d50000);
+  background: linear-gradient(135deg, #ffd600, #ff8f00, #d50000);
 }
 
 .cat-swatch.water {
-  background: linear-gradient(135deg, #1e63e9, #00bcd4, #d50000);
+  background: linear-gradient(135deg, #2bb8d8, #f3cf52, #f2a63a, #e05236, #c62828);
 }
 
 .cat-swatch.air {
-  background: linear-gradient(135deg, rgba(255, 235, 0, 0.05), #ffe100, #ff9600);
+  background: linear-gradient(135deg, rgba(255, 235, 0, 0.05), #ffe100, #ff9600, #ff3d00);
 }
 
 .cat-text {

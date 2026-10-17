@@ -1,5 +1,5 @@
 // PJJ-2 v1 — North America pollution heat map.
-// Categories (right-side panel): land (trash), water (major lakes), air (CO₂).
+// Categories (right-side panel): land (waste), water (major lakes), air (CO₂).
 //
 // Boundaries: real ArcGIS feature services (data/*.geojson)
 //  - US: DOT BTS "2020 Census Urban Areas" — ALL 2,646 urban areas
@@ -41,14 +41,21 @@ function logT(metric, lo, hi) {
 
 function colorLand(metric) {
   const t = Math.pow(logT(metric, LOGMIN, LOGMAX), 0.75);
-  const hue = 130 * (1 - t) - 10;
-  return `hsl(${hue.toFixed(0)}, 92%, ${48 - 6 * t}%)`;
+  // yellow (low) -> orange -> red (high); no green so it stands out on imagery
+  const hue = 52 * (1 - t);
+  return `hsl(${hue.toFixed(0)}, 95%, ${52 - 8 * t}%)`;
 }
 
 function colorWater(idx) {
   const t = Math.pow(clamp(idx / 100, 0, 1), 0.8);
-  // dark blue (hue 240) -> violet -> maroon (#800000 at hue 360)
-  return `hsl(${Math.round(240 + 120 * t)}, 85%, ${Math.round(30 - 5 * t)}%)`;
+  // clean (cyan) -> amber -> red (polluted)
+  const hue = Math.round(195 * (1 - t));
+  return `hsl(${hue}, 88%, ${Math.round(55 - 15 * t)}%)`;
+}
+
+function colorAir(metric) {
+  const t = logT(metric, AIR_LOGMIN, AIR_LOGMAX);
+  return `hsl(${Math.round(60 - 60 * t)}, 95%, ${Math.round(62 - 22 * t)}%)`;
 }
 
 function severityLabel(metric) {
@@ -274,15 +281,15 @@ function buildCityPolygons(feature, name, sub, landMetric, areaKm2, population, 
   cityLayer.addLayer(landPoly);
 
   const airMetric = modeledAirMetric(country, population, areaKm2);
-  const airPoly = L.geoJSON(feature, { style: () => baseStyleAirInvisible() }).getLayers()[0];
+  const airPoly = L.geoJSON(feature, { style: () => baseStyleAir(airMetric) }).getLayers()[0];
   airPoly.bindTooltip(
     `<strong>${name}</strong><br>` +
       `CO₂: <strong>${fmtInt(population * CO2_PER_CAPITA[country])} t/yr</strong> (modeled)<br>` +
       `${fmtInt(airMetric)} t/km²/yr — ${severityLabelAir(airMetric)}`,
     { sticky: true, className: "pjj-tip" }
   );
-  airPoly.on("mouseover", () => airPoly.setStyle({ ...baseStyleAirInvisible(), stroke: true, color: "#fff", weight: 1.5, fillOpacity: 0.22 }).bringToFront());
-  airPoly.on("mouseout", () => airPoly.setStyle(baseStyleAirInvisible()));
+  airPoly.on("mouseover", () => airPoly.setStyle({ ...baseStyleAir(airMetric), stroke: true, color: "#fff", weight: 1.5, fillOpacity: 0.7 }).bringToFront());
+  airPoly.on("mouseout", () => airPoly.setStyle(baseStyleAir(airMetric)));
   airPoly.on("click", () => {
     setCategory("air");
     showPanel({
@@ -298,23 +305,27 @@ function buildCityPolygons(feature, name, sub, landMetric, areaKm2, population, 
 function baseStyleLand(metric) {
   return {
     renderer: canvasRenderer,
-    stroke: false,
+    stroke: true,
+    color: "rgba(255, 255, 255, 0.5)",
+    weight: 0.8,
     fillColor: colorLand(metric),
-    fillOpacity: 0.78,
+    fillOpacity: 0.7,
     smoothFactor: 1.5,
   };
 }
 
-function baseStyleAirInvisible() {
-  return { renderer: canvasRenderer, stroke: false, fillColor: "#ffde00", fillOpacity: 0.04, smoothFactor: 1.5 };
+function baseStyleAir(metric) {
+  return { renderer: canvasRenderer, stroke: true, color: "rgba(255, 255, 255, 0.5)", weight: 0.8, fillColor: colorAir(metric), fillOpacity: 0.55, smoothFactor: 1.5 };
 }
 
 function baseStyleWater(idx) {
   return {
     renderer: canvasRenderer,
-    stroke: false,
+    stroke: true,
+    color: "rgba(255, 255, 255, 0.35)",
+    weight: 1.2,
     fillColor: colorWater(idx),
-    fillOpacity: 0.8,
+    fillOpacity: 0.72,
     smoothFactor: 1.5,
   };
 }
@@ -367,6 +378,121 @@ function severityLabelAir(metric) {
   lakesLayer.addLayer(poly);
 });
 
+// ---------- Water: coastal bands (sea only, no inland color) ----------
+let coastBandLayers = [];
+
+const COAST_HOTSPOTS = [
+  [29.0, -92.0, 0.95, 800], [27.5, -81.5, 0.75, 600], [37.3, -76.8, 0.8, 400],
+  [40.5, -74.0, 0.62, 300], [40.8, -72.5, 0.55, 300], [36.0, -76.0, 0.6, 300],
+  [43.6, -79.4, 0.8, 260], [32.8, -117.2, 0.75, 300], [37.9, -122.8, 0.65, 250],
+  [47.7, -122.8, 0.7, 250], [31.5, -114.5, 0.6, 300],
+  [48.3, -64.5, 0.6, 350], [45.0, -66.0, 0.66, 320], [58.5, -85.0, 0.25, 600],
+  [70.0, -105.0, 0.18, 800], [57.5, -148.0, 0.3, 500],
+];
+
+// smooth value noise, so the coast isn't painted one flat colour
+function coastNoise(lat, lng, freq) {
+  const x = lng * freq, y = lat * freq;
+  const x0 = Math.floor(x), y0 = Math.floor(y);
+  const fx = x - x0, fy = y - y0;
+  const h = (a, b) => {
+    let n = (Math.imul(a, 374761393) + Math.imul(b, 668265263)) | 0;
+    n = Math.imul(n ^ (n >>> 13), 1274126177);
+    return ((n ^ (n >>> 16)) >>> 0) / 4294967295;
+  };
+  const v00 = h(x0, y0), v10 = h(x0 + 1, y0), v01 = h(x0, y0 + 1), v11 = h(x0 + 1, y0 + 1);
+  const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+  return (v00 * (1 - sx) + v10 * sx) * (1 - sy) + (v01 * (1 - sx) + v11 * sx) * sy;
+}
+
+function coastStrength(lat, lng) {
+  let hot = 0;
+  for (const [hlat, hlng, s, r] of COAST_HOTSPOTS) {
+    const d = Math.hypot((lat - hlat) * 111, (lng - hlng) * 111 * Math.cos((lat * Math.PI) / 180));
+    if (d < r) hot = Math.max(hot, s * (1 - d / r));
+  }
+  // Modeled regional variation, not measured coastal water-quality data.
+  let s = 0.06 + 0.7 * hot;
+  s += 0.48 * coastNoise(lat, lng, 0.13) + 0.22 * coastNoise(lat, lng, 0.5);
+  return Math.max(0.03, Math.min(1, s));
+}
+
+// cyan (clean) -> amber -> red (polluted); deliberately no green so it does not
+// melt into the satellite imagery the way the land layer would.
+const COAST_BAND_COLORS = ["#2bb8d8", "#f3cf52", "#f2a63a", "#ec7d33", "#e05236", "#c62828"];
+
+function coastRGB(strength) {
+  const position = clamp(strength, 0, 1) * (COAST_BAND_COLORS.length - 1);
+  const index = Math.min(COAST_BAND_COLORS.length - 2, Math.floor(position));
+  const fraction = position - index;
+  const a = parseInt(COAST_BAND_COLORS[index].slice(1), 16);
+  const b = parseInt(COAST_BAND_COLORS[index + 1].slice(1), 16);
+  return [16, 8, 0].map((shift) => Math.round(((a >> shift) & 255) * (1 - fraction) + ((b >> shift) & 255) * fraction));
+}
+
+// Colour interpolation happens BEFORE the sea-only mask is applied. Neither
+// smoothing nor interpolation can spread the overlay onto the land.
+const CoastalGradient = L.GridLayer.extend({
+  createTile(coords) {
+    const size = this.getTileSize().x;
+    const tile = document.createElement("canvas");
+    tile.width = tile.height = size;
+    const ctx = tile.getContext("2d");
+    const origin = L.point(coords.x * size, coords.y * size);
+    const step = 8;
+    const samples = size / step + 3;
+    const field = document.createElement("canvas");
+    field.width = field.height = samples;
+    const fieldCtx = field.getContext("2d");
+    const image = fieldCtx.createImageData(samples, samples);
+    for (let y = 0; y < samples; y++) {
+      for (let x = 0; x < samples; x++) {
+        const ll = map.unproject(origin.add([(x - 1) * step, (y - 1) * step]), coords.z);
+        const rgb = coastRGB(coastStrength(ll.lat, ll.lng));
+        const offset = (y * samples + x) * 4;
+        image.data.set([...rgb, 184], offset);
+      }
+    }
+    fieldCtx.putImageData(image, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(field, -step * 1.5, -step * 1.5, samples * step, samples * step);
+    ctx.globalCompositeOperation = "destination-in";
+    ctx.beginPath();
+    const geometry = window.PJJ_COAST_MASK.geometry;
+    const polygons = geometry.type === "Polygon" ? [geometry.coordinates] : geometry.coordinates;
+    for (const polygon of polygons) {
+      for (const ring of polygon) {
+        ring.forEach(([lng, lat], i) => {
+          const p = map.project([lat, lng], coords.z).subtract(origin);
+          if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+        });
+        ctx.closePath();
+      }
+    }
+    ctx.fillStyle = "#fff";
+    ctx.fill("evenodd");
+    return tile;
+  },
+});
+
+function buildCoastBands() {
+  if (!window.PJJ_COAST_MASK) return;
+  if (!map.getPane("coastalGradient")) {
+    const pane = map.createPane("coastalGradient");
+    pane.style.zIndex = 390;
+    pane.style.pointerEvents = "none";
+  }
+  const gradient = new CoastalGradient({
+    pane: "coastalGradient", tileSize: 256, bounds: [[7, -170], [72, -50]],
+    noWrap: true, updateWhenIdle: true,
+  });
+  const outline = L.geoJSON(window.PJJ_COAST_MASK, {
+    style: () => ({ ...baseStyleWater(0), fill: false, smoothFactor: 0.6, lineJoin: "round" }),
+  });
+  outline.bindTooltip("Coastal water pollution — modeled estimate", { sticky: true, className: "pjj-tip" });
+  coastBandLayers = [gradient, outline];
+}
+
 // ---------- Wards (GTA detail, land + air categories) ----------
 (window.PJJ_TORONTO_WARDS.features || []).forEach((f) => {
   const p = f.properties;
@@ -413,14 +539,14 @@ function buildWardPolygons(landGroup, airGroup, feature, name, sub, landMetric, 
 
   const airMetric = modeledAirMetric(country, pop, areaKm2);
   airWardPoints.push([centroidOf(feature.geometry)[0], centroidOf(feature.geometry)[1], logT(airMetric, AIR_LOGMIN, AIR_LOGMAX), areaKm2]);
-  const airPoly = L.geoJSON(feature, { style: () => baseStyleAirInvisible() }).getLayers()[0];
+  const airPoly = L.geoJSON(feature, { style: () => baseStyleAir(airMetric) }).getLayers()[0];
   airPoly.bindTooltip(
     `<strong>${name}</strong><br>CO₂: <strong>${fmtInt(pop * CO2_PER_CAPITA[country])} t/yr</strong> (modeled)<br>` +
       `${fmtInt(airMetric)} t/km²/yr — ${severityLabelAir(airMetric)}`,
     { sticky: true, className: "pjj-tip" }
   );
-  airPoly.on("mouseover", () => airPoly.setStyle({ ...baseStyleAirInvisible(), stroke: true, color: "#fff", weight: 1.5, fillOpacity: 0.22 }).bringToFront());
-  airPoly.on("mouseout", () => airPoly.setStyle(baseStyleAirInvisible()));
+  airPoly.on("mouseover", () => airPoly.setStyle({ ...baseStyleAir(airMetric), stroke: true, color: "#fff", weight: 1.5, fillOpacity: 0.7 }).bringToFront());
+  airPoly.on("mouseout", () => airPoly.setStyle(baseStyleAir(airMetric)));
   airPoly.on("click", () => {
     setCategory("air");
     showPanel({
@@ -434,14 +560,21 @@ function buildWardPolygons(landGroup, airGroup, feature, name, sub, landMetric, 
 
 // ---------- Glows: land heat + air smoke ----------
 const LAND_GRADIENT = {
-  0.0: "#00c853", 0.35: "#7ccb3a", 0.55: "#ffd600", 0.75: "#ff6d00", 1.0: "#d50000",
+  0.0: "#ffd600", 0.2: "#ffb800", 0.4: "#ff9a00", 0.6: "#ff6d00", 0.8: "#e53935", 1.0: "#c62828",
 };
 const AIR_GRADIENT = {
   0.0: "rgba(255, 235, 0, 0)",
   0.3: "rgba(255, 225, 0, 0.25)",
   0.55: "rgba(255, 205, 0, 0.5)",
-  0.8: "rgba(255, 180, 0, 0.75)",
-  1.0: "rgba(255, 150, 0, 0.95)",
+  0.8: "rgba(255, 150, 0, 0.75)",
+  0.92: "rgba(255, 90, 0, 0.9)",
+  1.0: "rgba(255, 30, 0, 0.95)",
+};
+const WATER_GRADIENT = {
+  0.0: "#26c6da",
+  0.45: "#ffa726",
+  0.78: "#ef5350",
+  1.0: "#c62828",
 };
 
 let heatLayers = [];
@@ -469,12 +602,17 @@ function buildGlow(points, gradient, areaMult, maxOpacity) {
   };
   Object.keys(buckets).forEach((k) => {
     if (!buckets[k].length) return;
-    const layer = L.heatLayer(buckets[k], {
+    const layer = L.heatLayer(buckets[k].map((p) => [p[0], p[1], p[2]]), {
       radius: radii[k],
-      blur: isAir ? 0.9 : 0.85,
-      maxZoom: 18, // no intensity damping — glow strength handled here
+      blur: isAir ? Math.max(12, radii[k] * 0.9) : Math.max(12, radii[k] * 0.85),
+      // NOTE: leaflet.heat scales every point's intensity by
+      // 1 / 2^(maxZoom - zoom). With maxZoom pinned to 18 that factor hit
+      // 1/4096 at low zoom and pushed every point under minOpacity, so the
+      // glow faded out at both extremes. Pinning maxZoom to the *current*
+      // zoom makes the factor exactly 1 and the glow strength is ours to set.
+      maxZoom: zoom,
       maxOpacity,
-      minOpacity: isAir ? 0.04 : 0.06,
+      minOpacity: isAir ? 0.04 : 0.09,
       gradient,
     });
     heatLayers.push(layer);
@@ -483,12 +621,19 @@ function buildGlow(points, gradient, areaMult, maxOpacity) {
   });
 }
 
+// Haze strength tapers at world-scale zooms, where every pixel is packed with
+// overlapping cities, but it is never switched off.
+function maxOpacityForZoom(zoom) {
+  if (zoom < 4) return 0.18;
+  if (zoom < 7) return 0.25;
+  return 0.3;
+}
+
 function rebuildGlows() {
   heatLayers.forEach((l) => map.removeLayer(l));
   heatLayers = [];
-  if (map.getZoom() < 3) return;
-  if (CATEGORY === "land") buildGlow(heatPoints, LAND_GRADIENT, 1.15, 0.85);
-  if (CATEGORY === "air") buildGlow(airPoints.concat(airWardPoints), AIR_GRADIENT, 1.6, 0.95);
+  if (CATEGORY === "land") buildGlow(heatPoints, LAND_GRADIENT, 1.15, maxOpacityForZoom(map.getZoom()));
+  if (CATEGORY === "air") buildGlow(airPoints.concat(airWardPoints), AIR_GRADIENT, 1.6, 0.35);
 }
 map.on("zoomend", rebuildGlows);
 
@@ -498,9 +643,9 @@ const legendMax = document.getElementById("legend-max");
 const legendGradient = document.getElementById("legend-gradient");
 
 const LEGENDS = {
-  land: { min: "Low", max: "High", css: "linear-gradient(to right, #00c853, #ffd600, #d50000)" },
-  water: { min: "Clean (dark blue)", max: "Polluted (maroon)", css: "linear-gradient(to right, #0d1e6e, #5b2a86, #800000)" },
-  air: { min: "Clear", max: "Smoky (high CO₂)", css: "linear-gradient(to right, rgba(255,235,0,0), #ffe100, #ff9600)" },
+  land: { min: "Low", max: "High", css: "linear-gradient(to right, #ffd600, #ff8f00, #d50000)" },
+  water: { min: "Clean (cyan)", max: "Polluted (red)", css: "linear-gradient(to right, #2bb8d8, #f3cf52, #f2a63a, #e05236, #c62828)" },
+  air: { min: "Clear", max: "Smoky (high CO₂)", css: "linear-gradient(to right, rgba(255,235,0,0), #ffe100, #ff9600, #ff3d00, #c62828)" },
 };
 
 function updateLegend() {
@@ -524,6 +669,7 @@ function applyCategory() {
   [cityLayer, lakesLayer, airCityLayer,
     landWardLayers.Toronto, landWardLayers.Markham,
     airWardLayers.Toronto, airWardLayers.Markham].forEach((l) => map.removeLayer(l));
+  coastBandLayers.forEach((l) => map.removeLayer(l));
   heatLayers.forEach((l) => map.removeLayer(l));
   heatLayers = [];
   rebuildGlows();
@@ -540,7 +686,9 @@ function applyCategory() {
       map.addLayer(cityLayer);
     }
   } else if (CATEGORY === "water") {
-    map.addLayer(lakesLayer); // lakes only — wards/cities hidden
+    if (!coastBandLayers.length) buildCoastBands();
+    coastBandLayers.forEach((l) => map.addLayer(l));
+    map.addLayer(lakesLayer); // lakes on top of the sea-side coastal bands
   } else if (CATEGORY === "air") {
     if (zoomed && inGTA) {
       map.addLayer(airWardLayers.Toronto);
