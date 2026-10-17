@@ -260,6 +260,7 @@ function rebuildHeat() {
     });
     heatLayers.push(layer);
     map.addLayer(layer);
+    if (layer._canvas) layer._canvas.style.pointerEvents = "none";
   });
 }
 map.on("zoomend", rebuildHeat);

@@ -85,6 +85,10 @@ body {
   display: none;
 }
 
+.leaflet-heatmap-layer {
+  pointer-events: none !important;
+}
+
 #info-panel {
   position: absolute;
   left: 10px;
