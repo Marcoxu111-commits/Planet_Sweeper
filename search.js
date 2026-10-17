@@ -4,6 +4,7 @@
   const input = document.getElementById("city-query");
   const list = document.getElementById("city-results");
   const status = document.getElementById("city-search-status");
+  const homeKey = "planet-sweeper.city.v1";
   const normalize = (s) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
   const entries = [];
   const seen = new Set();
@@ -14,6 +15,8 @@
     entries.push({ feature, name, region, key, normalizedName: normalize(name) });
   }
   (window.PJJ_GTA_REGIONS?.features || []).forEach((f) => add(f, f.properties.name, "Ontario, Canada"));
+  (window.PJJ_TORONTO_DISTRICTS?.features || []).forEach((f) => add(f, f.properties.name, "Toronto district, Ontario, Canada"));
+  (window.PJJ_TORONTO_WARDS?.features || []).forEach((f) => add(f, f.properties.AREA_NAME, `Toronto ward ${f.properties.AREA_SHORT_CODE}, Ontario, Canada`));
   (window.PJJ_CA_CITIES?.features || []).forEach((f) => {
     // Municipality bounds provide better destinations for GTA searches than
     // Toronto's single sprawling population-centre boundary.
@@ -22,7 +25,50 @@
   });
   (window.PJJ_US_CITIES?.features || []).forEach((f) => add(f, f.properties.NAME.replace(/--/g, " – "), "USA"));
 
-  let matches = [], active = -1;
+  let matches = [], active = -1, preview = null, home = null;
+  const cityName = (entry) => {
+    if (entry.normalizedName.startsWith("new york ")) return "New York";
+    if (entry.normalizedName.startsWith("chicago ")) return "Chicago";
+    return entry.name;
+  };
+  function cityData(entry) {
+    const center = L.geoJSON(entry.feature).getBounds().getCenter();
+    return { name: cityName(entry), datasetName: entry.name, region: entry.region, center: { lat: center.lat, lng: center.lng } };
+  }
+  window.PlanetCity = { get: () => home ? { ...home, center: { ...home.center } } : null };
+  function refreshHome() {
+    document.getElementById("home-city-bar").hidden = !home;
+    document.getElementById("home-city-name").textContent = home?.name || "";
+    const isHome = preview && home?.datasetName === preview.name && home?.region === preview.region;
+    const button = document.getElementById("set-home-city");
+    button.textContent = isHome ? "✓ Your city is set" : "Set as your city";
+    button.disabled = !!isHome;
+  }
+  function showPreview(entry, moveMap = true) {
+    preview = entry;
+    const bounds = L.geoJSON(entry.feature).getBounds();
+    if (!bounds.isValid()) return;
+    input.value = cityName(entry);
+    close();
+    panel.classList.remove("open");
+    if (moveMap) map.fitBounds(bounds, { padding: [45, 45], maxZoom: 12, animate: false });
+    window.PlanetPanels?.expand("main-panel");
+    document.getElementById("city-preview").hidden = false;
+    document.getElementById("city-preview-name").textContent = cityName(entry);
+    document.getElementById("city-preview-region").textContent = entry.region;
+    document.getElementById("city-set-status").textContent = "";
+    const image = document.getElementById("city-preview-photo");
+    const photo = window.PlanetCityPhotos?.get(entry.name);
+    const credit = document.getElementById("city-preview-credit");
+    credit.replaceChildren();
+    if (photo) credit.append(PlanetCityPhotos.caption(photo));
+    image.hidden = !photo;
+    if (photo) { image.src = photo.src; image.alt = photo.alt; }
+    else { image.removeAttribute("src"); image.alt = ""; }
+    refreshHome();
+    status.textContent = `${cityName(entry)} selected. Choose Set as your city to use it for local volunteering.`;
+    document.dispatchEvent(new CustomEvent("planet:city-preview", { detail: cityData(entry) }));
+  }
   function close() {
     list.hidden = true;
     input.setAttribute("aria-expanded", "false");
@@ -32,13 +78,7 @@
   function select(index) {
     const entry = matches[index];
     if (!entry) return;
-    const bounds = L.geoJSON(entry.feature).getBounds();
-    if (!bounds.isValid()) return;
-    input.value = entry.name;
-    close();
-    panel.classList.remove("open");
-    map.fitBounds(bounds, { padding: [45, 45], maxZoom: 12, animate: false });
-    status.textContent = `Map centered on ${entry.name}, ${entry.region}.`;
+    showPreview(entry);
   }
   function highlight(index) {
     active = (index + matches.length) % matches.length;
@@ -48,7 +88,7 @@
   }
   function update() {
     const query = normalize(input.value);
-    if (!query) { status.textContent = ""; close(); return; }
+    if (!query) { matches = []; status.textContent = ""; close(); return; }
     matches = entries.filter((e) => query.split(" ").every((word) => e.key.includes(word)))
       .sort((a, b) => {
         const score = (e) => e.normalizedName === query ? 0 : e.normalizedName.startsWith(query) ? 1 : 2;
@@ -94,6 +134,28 @@
   form.addEventListener("submit", (event) => { event.preventDefault(); if (!list.hidden) select(active < 0 ? 0 : active); });
   document.addEventListener("click", (event) => { if (!form.contains(event.target)) close(); });
   form.addEventListener("focusout", (event) => { if (!form.contains(event.relatedTarget)) close(); });
+  document.getElementById("set-home-city").addEventListener("click", () => {
+    if (!preview) return;
+    home = cityData(preview);
+    let saved = true;
+    try { localStorage.setItem(homeKey, JSON.stringify({ datasetName: preview.name, region: preview.region })); }
+    catch { saved = false; }
+    refreshHome();
+    document.getElementById("city-set-status").textContent = saved ? `${home.name} is your city. You're ready to explore local initiatives.` : `${home.name} is set for this visit. Browser storage is unavailable.`;
+    document.dispatchEvent(new CustomEvent("planet:city-set", { detail: window.PlanetCity.get() }));
+  });
+  function chooseCity() {
+    window.PlanetPanels?.expand("main-panel");
+    document.getElementById("city-preview").hidden = true;
+    input.value = ""; matches = []; close(); input.focus();
+  }
+  document.getElementById("change-home-city").addEventListener("click", chooseCity);
+  document.addEventListener("planet:choose-city", chooseCity);
+  try {
+    const saved = JSON.parse(localStorage.getItem(homeKey) || "null");
+    const entry = entries.find((e) => e.name === saved?.datasetName && e.region === saved?.region);
+    if (entry) { home = cityData(entry); showPreview(entry); }
+  } catch { /* A stored preference is optional; keep city search usable. */ }
   L.DomEvent.disableClickPropagation(form);
   L.DomEvent.disableScrollPropagation(form);
 })();

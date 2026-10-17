@@ -10,28 +10,123 @@
 <body>
   <div id="map"></div>
 
-  <div class="hud">
-    <h1>PJJ-2 <span>v1 — North America</span></h1>
-    <p>Faded heat map over satellite imagery. Every North American city — 2,646 US urban areas + 1,030 Canadian population centres. Sample litter density (t/km²), hover for details.</p>
-    <p class="hint">GTA: 25 municipal regions, plus Toronto and Markham wards. Areas without litter reports use labeled estimates.</p>
+  <div id="main-panel" class="hud collapse-panel">
+    <div class="hud-heading"><h1>PJJ-2 <span>v1 — North America</span></h1><button class="panel-toggle" type="button" data-panel="main-panel" data-panel-name="City and initiatives" aria-controls="hud-body" aria-expanded="true" aria-label="Collapse city and initiatives">−</button></div>
+    <div id="hud-body">
+    <p class="hud-intro">Explore your city. Turn a hotspot into a cleaner neighbourhood.</p>
     <div class="legend">
       <span id="legend-min">Low</span>
       <div class="gradient" id="legend-gradient"></div>
       <span id="legend-max">High</span>
     </div>
     <form id="city-search" role="search" autocomplete="off">
-      <label for="city-query">Find a city</label>
+      <label for="city-query">Find your city</label>
       <input id="city-query" type="search" placeholder="Toronto, Mississauga, New York…"
         role="combobox" aria-autocomplete="list" aria-expanded="false"
         aria-controls="city-results" spellcheck="false" />
       <ul id="city-results" role="listbox" aria-label="Matching cities" hidden></ul>
       <span id="city-search-status" class="sr-only" role="status" aria-live="polite"></span>
     </form>
+    <div id="home-city-bar" class="home-city-bar" hidden><span><small>Your city</small><strong id="home-city-name"></strong></span><button id="change-home-city" type="button">Change</button></div>
+    <section id="city-preview" class="city-preview" aria-label="Selected city" hidden>
+      <img id="city-preview-photo" alt="" hidden />
+      <div id="city-preview-credit" class="city-preview-credit"></div>
+      <div class="city-preview-body"><span class="initiative-eyebrow">Explore locally</span><h2 id="city-preview-name"></h2><p id="city-preview-region"></p><button id="set-home-city" type="button">Set as your city</button><p id="city-set-status" role="status"></p></div>
+    </section>
+    <div class="initiative-actions hud-actions">
+      <button id="report-hotspot" type="button"><span class="action-icon" aria-hidden="true">＋</span><span><strong>Report a hotspot</strong><small>Choose a spot. Rally some help.</small></span><span aria-hidden="true">↗</span></button>
+      <button id="find-initiatives" type="button"><span class="action-icon" aria-hidden="true">♡</span><span><strong>Volunteer nearby</strong><small>Find your next local cleanup.</small></span><span aria-hidden="true">↗</span></button>
+    </div>
+    </div>
   </div>
 
+  <div id="right-rail">
+    <div id="info-panel" class="collapse-panel">
+      <div class="panel-head"><span>Region details</span><div class="panel-header-actions"><button class="panel-toggle" type="button" data-panel="info-panel" data-panel-name="Region details" aria-controls="info-panel-body" aria-expanded="true" aria-label="Collapse region details">−</button><button id="info-panel-close" aria-label="Close region details">×</button></div></div>
+      <div id="info-panel-body"></div>
+    </div>
+  <aside id="initiative-panel" class="initiative-panel" role="dialog" aria-modal="false" aria-labelledby="initiative-heading" tabindex="-1" hidden>
+    <header class="initiative-head">
+      <div><span class="initiative-eyebrow">Planet Sweeper initiatives</span><h2 id="initiative-heading">Make a difference</h2></div>
+      <div class="panel-header-actions"><button class="panel-toggle" type="button" data-panel="initiative-panel" data-panel-name="Initiatives" aria-controls="initiative-body" aria-expanded="true" aria-label="Collapse initiatives">−</button><button id="initiative-close" type="button" aria-label="Close initiatives">×</button></div>
+    </header>
+    <div id="initiative-body">
+    <p class="initiative-subtitle">A little local action goes a long way.</p>
+    <details class="prototype-notice"><summary>Local preview · saved on this device only</summary><p>Reports, photos, sign-ups, and chat stay in this browser. They are not published or shared with other volunteers.</p></details>
+    <ol id="report-steps" class="report-steps" aria-label="Report progress" hidden><li id="report-step-location" aria-current="step"><span>1</span> Choose a location</li><li id="report-step-details"><span>2</span> Add the details</li></ol>
+    <p id="initiative-status" role="status" aria-live="polite"></p>
+    <section id="initiative-location" hidden>
+      <h3 id="location-heading">Where is the hotspot?</h3>
+      <p id="location-instructions">Search an address or choose a spot directly on the map.</p>
+      <div class="location-methods" role="group" aria-label="Choose a location method"><button id="location-method-address" type="button" aria-pressed="true">Search an address</button><button id="location-method-map" type="button" aria-pressed="false">Pick on the map</button></div>
+      <div id="map-location-help" class="map-location-help" hidden><span aria-hidden="true">⌖</span><p>Move the map, then click the exact spot you have in mind.</p><button id="use-map-center" type="button">Use map centre instead</button></div>
+      <form id="address-search" class="location-search-card">
+        <label for="hotspot-address">Specific address</label>
+        <div class="initiative-input-row"><input id="hotspot-address" type="search" maxlength="250" placeholder="Street address, city, country" required /><button type="submit">Find</button></div>
+        <small>Lookup sends this address to OpenStreetMap's Nominatim service. Search on submit only.</small>
+      </form>
+      <ul id="address-results" class="address-results" aria-label="Address matches"></ul>
+      <small>Address data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>.</small>
+    </section>
+    <form id="hotspot-form" hidden>
+      <div class="initiative-location-summary"><span><small>Selected hotspot</small><span id="hotspot-coordinates"></span></span><button id="change-hotspot-location" type="button">Change spot</button></div>
+      <p class="initiative-hint">Drag the pin to fine-tune the spot.</p>
+      <fieldset class="initiative-fieldset"><legend>About the cleanup</legend>
+      <label for="hotspot-title">Give your initiative a name</label>
+      <input id="hotspot-title" maxlength="100" placeholder="Help clean up the creek trail" required />
+      <label for="hotspot-description">What needs a helping hand?</label>
+      <textarea id="hotspot-description" rows="4" maxlength="2000" placeholder="What's here, how to get there, and what volunteers should bring…" required></textarea>
+      <label for="volunteers-needed">Volunteers needed</label>
+      <input id="volunteers-needed" type="number" min="1" max="100" value="5" required />
+      </fieldset>
+      <fieldset class="initiative-fieldset"><legend>A little about you</legend><div class="initiative-form-grid"><div>
+      <label for="reporter-name">Your display name</label>
+      <input id="reporter-name" maxlength="60" autocomplete="nickname" required />
+      </div><div>
+      <label for="reporter-role">Who are you?</label>
+      <select id="reporter-role"><option>Resident</option><option>Student</option><option>Community group</option><option>Organization</option><option>Other</option></select>
+      </div></div></fieldset>
+      <fieldset class="initiative-fieldset"><legend>Show the spot</legend>
+      <label for="hotspot-images">Photos (optional, up to 3)</label>
+      <input id="hotspot-images" type="file" accept="image/jpeg,image/png,image/webp" multiple />
+      <small>Photos are resized and stored locally. Avoid faces, personal details, and private property.</small>
+      <div id="hotspot-photo-previews" class="initiative-photos"></div>
+      </fieldset>
+      <p class="initiative-hint">Report litter only. Do not handle sharps, chemicals, or hazardous waste; contact the local authority.</p>
+      <button class="initiative-primary" type="submit">Save hotspot locally</button>
+    </form>
+    <section id="nearby-initiatives" hidden>
+      <div class="nearby-hero"><span class="initiative-eyebrow">Small actions. Real impact.</span><h3>A cleaner community starts here.</h3><p>Find a cleanup, lend a hand, and meet the people making a difference.</p></div>
+      <div class="nearby-search-area"><span class="initiative-eyebrow">Your search area</span><p id="nearby-location-label">Set your city or choose a location.</p>
+      <div class="initiative-actions"><button id="use-home-city" type="button">Use your city</button><button id="pick-volunteer-location" type="button">Address or map</button><button id="choose-volunteer-city" type="button">Find a city</button></div></div>
+      <div class="nearby-filter"><label for="initiative-radius">Search radius</label>
+      <select id="initiative-radius"><option value="5">5 km</option><option value="10">10 km</option><option value="25" selected>25 km</option><option value="50">50 km</option><option value="100">100 km</option></select>
+      </div><p id="nearby-result-count" class="initiative-hint" role="status"></p>
+      <div id="initiative-cards"></div>
+    </section>
+    <section id="initiative-detail" hidden>
+      <button id="back-to-initiatives" type="button">← Nearby opportunities</button>
+      <h3 id="detail-title"></h3>
+      <p id="detail-author"></p><p id="detail-location"></p>
+      <p id="detail-description" class="initiative-description"></p>
+      <div id="detail-images" class="initiative-photos"></div>
+      <p id="detail-volunteers" class="volunteer-count"></p>
+      <label for="volunteer-name">Your display name</label>
+      <input id="volunteer-name" maxlength="60" autocomplete="nickname" />
+      <div class="initiative-actions"><button id="join-initiative" class="initiative-primary" type="button">Sign up & enter group chat</button><button id="leave-initiative" type="button" hidden>Leave initiative</button></div>
+      <section id="initiative-chat" hidden>
+        <h3>Group chat <span class="initiative-eyebrow">local demo</span></h3>
+        <p class="initiative-hint">Messages are saved on this browser only, not delivered to other people.</p>
+        <div id="chat-messages" class="chat-messages" role="log" aria-label="Initiative group chat" aria-live="polite"></div>
+        <form id="chat-form"><label class="sr-only" for="chat-message">Message</label><div class="initiative-input-row"><input id="chat-message" maxlength="1000" placeholder="Plan your cleanup…" required /><button type="submit">Send locally</button></div></form>
+      </section>
+    </section>
+    </div>
+  </aside>
+
   <div id="category-panel">
-    <div class="cat-title">Pollution layers</div>
-    <div class="cat-list">
+    <div class="cat-title panel-title-row"><span>Pollution layers</span><button class="panel-toggle" type="button" data-panel="category-panel" data-panel-name="Pollution layers" aria-controls="layer-body" aria-expanded="true" aria-label="Collapse pollution layers">−</button></div>
+    <div id="layer-body" class="cat-list">
       <button class="cat-option active" data-cat="land">
         <span class="cat-swatch land"></span>
         <span class="cat-text">
@@ -56,12 +151,6 @@
     </div>
   </div>
 
-  <div id="info-panel">
-    <div class="panel-head">
-      <span>Region details</span>
-      <button id="info-panel-close" aria-label="Close">&times;</button>
-    </div>
-    <div id="info-panel-body"></div>
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -69,12 +158,16 @@
   <script src="data/us_cities.js"></script>
   <script src="data/ca_cities.js"></script>
   <script src="data/toronto_wards.js"></script>
-  <script src="data/markham_wards.js"></script>
+  <script src="data/toronto_districts.js"></script>
   <script src="data/gta_regions.js"></script>
   <script src="data/lakes.js"></script>
   <script src="data/coastal_areas.js"></script>
   <script src="data/real_litter.js"></script>
+  <script src="city-photos.js"></script>
+  <script src="panels.js"></script>
   <script src="app.js"></script>
   <script src="search.js"></script>
+  <script src="initiatives-store.js"></script>
+  <script src="initiatives.js"></script>
 </body>
 </html>

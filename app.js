@@ -5,7 +5,7 @@
 //  - US: DOT BTS "2020 Census Urban Areas" — ALL 2,646 urban areas
 //  - CA: Population Centres 2021 w/ population — ALL 1,030 centres
 //  - Toronto: City of Toronto "COTGEO_CITY_WARD" (25 wards)
-//  - Markham: City of Markham "OD_WARDS" (8 wards)
+//  - Markham: one official Ontario municipal boundary (no ward divisions)
 //  - Lakes: "North America Major Lakes" ArcGIS feature service (75 lakes)
 //
 // Metrics:
@@ -213,6 +213,9 @@ function showPanel(d) {
     ${d.extra ? `<p class="extra">${d.extra}</p>` : ""}
     <p class="src">${d.source}</p>
   `;
+  const photo = window.PlanetCityPhotos?.figure(d.name);
+  if (photo) panelBody.prepend(photo);
+  window.PlanetPanels?.expand("info-panel");
   panel.classList.add("open");
 }
 
@@ -226,8 +229,9 @@ const cityLayer = L.layerGroup();       // land polygons
 const airCityLayer = L.layerGroup();    // air: near-invisible click targets
 const lakesLayer = L.layerGroup();      // water polygons
 const gtaWasteLayer = L.layerGroup();  // all 25 GTA municipalities
-const landWardLayers = { Toronto: L.layerGroup(), Markham: L.layerGroup() };
-const airWardLayers = { Toronto: L.layerGroup(), Markham: L.layerGroup() };
+const landWardLayers = { Toronto: L.layerGroup() };
+const airWardLayers = { Toronto: L.layerGroup() };
+const markhamAirLayer = L.layerGroup(); // one municipal region, no ward splits
 const heatPoints = [];                  // land glow: [lat, lng, intensity, areaKm2]
 const airPoints = [];                   // air smoke: [lat, lng, intensity, areaKm2]
 const airWardPoints = [];               // air smoke wards: [lat, lng, intensity, areaKm2]
@@ -514,6 +518,19 @@ function buildCoastBands() {
     source: real ? real.source : "Modeled from Census 2021 population density; official Ontario municipal boundaries. No municipal litter-report dataset is available in this map.",
   }));
   gtaWasteLayer.addLayer(layer);
+  if (p.name === "Markham") {
+    const airMetric = modeledAirMetric("CA", p.population, p.areaKm2);
+    const airStyle = () => baseStyleAir(airMetric);
+    const airLayer = L.geoJSON(feature, { style: airStyle });
+    airLayer.bindTooltip(`<strong>Markham</strong><br>${fmtInt(airMetric)} t CO₂/km²/yr — modeled`, { sticky: true, className: "pjj-tip" });
+    airLayer.on("click", () => showPanel({
+      name: "Markham", sub: "Greater Toronto Area — municipal region",
+      metric: airMetric, total: p.population * CO2_PER_CAPITA.CA,
+      population: p.population, areaKm2: p.areaKm2, real: false,
+      source: "Modeled CO₂ from Census 2021 population; official Ontario municipal boundary.",
+    }));
+    markhamAirLayer.addLayer(airLayer);
+  }
 });
 
 // ---------- Wards (GTA detail, land + air categories) ----------
@@ -528,16 +545,6 @@ function buildCoastBands() {
   const realInfo = reports != null ? { reports, period: "2025" } : null;
   buildWardPolygons(landWardLayers.Toronto, airWardLayers.Toronto, f, name, "Toronto ward",
     landMetric, areaKm2, pop, realInfo, "CA");
-});
-
-(window.PJJ_MARKHAM_WARDS.features || []).forEach((f) => {
-  const p = f.properties;
-  const areaKm2 = p.HECTARES / 100;
-  const landMetric = modeledLandMetric("Markham Ward " + p.WARD, wardPopulation("Markham Ward " + p.WARD, "Markham"), areaKm2);
-  const pop = wardPopulation("Markham Ward " + p.WARD, "Markham");
-  const name = `Ward ${p.WARD}`;
-  buildWardPolygons(landWardLayers.Markham, airWardLayers.Markham, f, name,
-    `Markham ward — Councillor ${p.COUNCILLOR}`, landMetric, areaKm2, pop, null, "CA");
 });
 
 function buildWardPolygons(landGroup, airGroup, feature, name, sub, landMetric, areaKm2, pop, realInfo, country) {
@@ -694,9 +701,8 @@ function setCategory(cat) {
 
 function applyCategory() {
   // remove everything category-specific
-  [cityLayer, lakesLayer, airCityLayer, gtaWasteLayer,
-    landWardLayers.Toronto, landWardLayers.Markham,
-    airWardLayers.Toronto, airWardLayers.Markham].forEach((l) => map.removeLayer(l));
+  [cityLayer, lakesLayer, airCityLayer, gtaWasteLayer, markhamAirLayer,
+    landWardLayers.Toronto, airWardLayers.Toronto].forEach((l) => map.removeLayer(l));
   coastBandLayers.forEach((l) => map.removeLayer(l));
   heatLayers.forEach((l) => map.removeLayer(l));
   heatLayers = [];
@@ -710,7 +716,6 @@ function applyCategory() {
     if (map.getZoom() >= DETAIL_ZOOM - 1) map.addLayer(gtaWasteLayer);
     if (zoomed) {
       map.addLayer(landWardLayers.Toronto);
-      map.addLayer(landWardLayers.Markham);
     }
   } else if (CATEGORY === "water") {
     if (!coastBandLayers.length) buildCoastBands();
@@ -718,9 +723,9 @@ function applyCategory() {
     map.addLayer(lakesLayer); // lakes on top of the sea-side coastal bands
   } else if (CATEGORY === "air") {
     map.addLayer(airCityLayer);
+    if (map.getZoom() >= DETAIL_ZOOM - 1) map.addLayer(markhamAirLayer);
     if (zoomed) {
       map.addLayer(airWardLayers.Toronto);
-      map.addLayer(airWardLayers.Markham);
     }
   }
 }
