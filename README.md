@@ -3,11 +3,11 @@
 PlanetSweeper is an interactive environmental map made using ArcGIS, providing visuals for littering and pollution frequencies around the world.
 Our model allows users to report local littering hotspots and request volunteer help.
 
-## v1 — North America litter heat map
+## v1 — Americas pollution map
 
 Run `node serve.js` and open `http://localhost:5173` (no build step or dependencies).
 
-- **Coverage**: all 2,646 US urban areas + all 1,030 Canadian population centres
+- **Coverage**: the existing 2,646 US urban areas + 1,030 Canadian population centres, supplemented by 1,400+ named city locations and 600+ mapped urban footprints across Mexico, Central America, South America, the Caribbean, and other American territories. This is broad continental reference coverage, not every settlement or municipality.
 - **Basemap**: Esri World Imagery satellite tiles
 - **Heat scale**: yellow → red polygons (log-scaled reports/km²/yr); haze only at overview zooms
 - **GTA detail**: 25 municipal regions, plus Toronto wards at zoom ≥ 9. Markham stays one municipal region, not separate wards.
@@ -30,13 +30,15 @@ Run `node serve.js` and open `http://localhost:5173` (no build step or dependenc
 | Chicago litter reports | Chicago 311 Service Requests (Socrata `v6vf-nfxy`), trailing 12 months |
 | LA litter reports | MyLA311 2025 (Socrata `h73f-gn57`) |
 | Toronto litter reports (incl. per ward) | Toronto 311 Service Requests 2025 (open data ZIP) |
+| Supplementary Americas cities and lakes | Natural Earth 1:10m populated places, urban areas, and lakes (public domain); clipped to Natural Earth country land polygons |
+| Supplementary national CO₂ factors | World Bank 2022, indicator `EN.GHG.CO2.PC.CE.AR5` (CO₂ excluding land-use change, per capita); some territories use their sovereign's factor |
 
 Regions without published 311/open litter data are labeled **modeled estimate** —
 modeled from the real population density of each boundary, not real litter counts.
 
 ## Water layers
 
-The continuous coastal gradient is unchanged. Its 148 analysis regions are now
+The continuous coastal gradient style is retained and extends across the Americas. Its analysis regions are
 clickable, with very faint boundaries. Region details show the modeled index at
 the clicked point, sea-region area, coordinates, and provenance. These are
 illustrative map-analysis regions, not official water-management boundaries or
@@ -46,6 +48,35 @@ Lakes now use a world-aligned gradient clipped to each lake's polygon, with thei
 white outlines and click details retained. In-lake colour variation is visual,
 not spatially measured water quality; the popup retains the lake's single index
 and explicitly explains this. No blur is applied outside lake boundaries.
+
+Additional named Natural Earth lakes/reservoirs extend the water layer through
+Central and South America (including Titicaca). Their indices are illustrative
+settlement-proximity estimates, not measured water samples. Coastline coverage
+extends to Patagonia and Greenland, with the same land-clipped gradient approach.
+
+### Continental coverage limits
+
+- Existing detailed US, Canada, and GTA sources remain in place.
+- New city populations are Natural Earth reference estimates with varying source
+  years, **not current census counts**. Matched urban footprints are generalized
+  physical built-up areas, not municipal or ward boundaries. Pollution is modeled.
+- Named places with no matched urban footprint remain searchable and can be set
+  as your city for initiatives, but do not get an invented circle/polygon or a
+  fabricated pollution measurement. Their preview explains this limitation.
+- Air totals are estimates from population × a 2022 national/sovereign World Bank
+  factor. These are not monitored city emissions. When no factor is available,
+  the popup explicitly labels an illustrative 3.5 t/person/year fallback.
+- Country boundaries and naming follow the Natural Earth reference dataset;
+  they are not a statement about disputed sovereignty.
+- City photos remain available for the selected demo cities/regions; this is
+  not a photo catalogue for every city.
+
+Sources: [Natural Earth vector data](https://github.com/nvkelso/natural-earth-vector),
+[Natural Earth public-domain terms](https://www.naturalearthdata.com/about/terms-of-use/),
+[World Bank indicator/API](https://api.worldbank.org/v2/country/all/indicator/EN.GHG.CO2.PC.CE.AR5?format=json&date=2022&per_page=400).
+Rebuild supplementary cities/lakes with `node scripts/gen_americas.js`; rebuild
+the wider sea mask with `node scripts/gen_coast.js`, then
+`node scripts/gen_coastal_areas.js`.
 
 ## Initiative system (local prototype)
 
@@ -65,8 +96,10 @@ messages are stored in this browser's `localStorage`, not sent to other voluntee
 They survive reloads on the same origin, but will not appear on another device or
 domain. Matching tabs on the same browser/origin refresh through storage events.
 Display names are not verified identities. The interface labels these limits.
-Saved and draft hotspot pins use the same teal/emerald teardrop shape; a dashed
-white border distinguishes a draggable draft.
+Saved and draft hotspot pins use a plain solid-teal teardrop with a white dot;
+a dashed white border distinguishes a draggable draft. Zoom controls live in the
+bottom-left corner. Address lookup includes American countries/territories, and
+nearby search supports radii up to 500 km without device geolocation.
 
 For a public launch, add authenticated accounts, a shared database with geographic
 queries, private photo storage, server-enforced membership/capacity permissions,

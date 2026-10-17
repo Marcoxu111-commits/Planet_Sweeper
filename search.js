@@ -12,7 +12,8 @@
     const key = normalize(`${name} ${region}`);
     if (seen.has(key)) return;
     seen.add(key);
-    entries.push({ feature, name, region, key, normalizedName: normalize(name) });
+    const aliases = feature.properties?.aliases || [];
+    entries.push({ feature, name, region, key: `${key} ${normalize(aliases.join(" "))}`, normalizedName: normalize(name) });
   }
   (window.PJJ_GTA_REGIONS?.features || []).forEach((f) => add(f, f.properties.name, "Ontario, Canada"));
   (window.PJJ_GTA_DETAIL?.features || []).forEach((f) => add(f, f.properties.name, `${f.properties.city}, Ontario, Canada`));
@@ -25,6 +26,7 @@
     add(f, f.properties.pcname, "Canada");
   });
   (window.PJJ_US_CITIES?.features || []).forEach((f) => add(f, f.properties.NAME.replace(/--/g, " – "), "USA"));
+  (window.PJJ_AMERICAS_CITIES?.features || []).forEach((f) => add(f, f.properties.name, f.properties.countryName));
 
   let matches = [], active = -1, preview = null, home = null;
   const cityName = (entry) => {
@@ -33,7 +35,8 @@
     return entry.name;
   };
   function cityData(entry) {
-    const center = L.geoJSON(entry.feature).getBounds().getCenter();
+    const reference = entry.feature.properties?.center;
+    const center = reference ? L.latLng(reference[1], reference[0]) : L.geoJSON(entry.feature).getBounds().getCenter();
     return { name: cityName(entry), datasetName: entry.name, region: entry.region, center: { lat: center.lat, lng: center.lng } };
   }
   window.PlanetCity = { get: () => home ? { ...home, center: { ...home.center } } : null };
@@ -56,7 +59,11 @@
     window.PlanetPanels?.expand("main-panel");
     document.getElementById("city-preview").hidden = false;
     document.getElementById("city-preview-name").textContent = cityName(entry);
-    document.getElementById("city-preview-region").textContent = entry.region;
+    const properties = entry.feature.properties;
+    document.getElementById("city-preview-region").textContent = properties?.locationOnly
+      ? `${entry.region} · City location only; no mapped urban footprint in this dataset.`
+      : properties?.center && !properties.population
+        ? `${entry.region} · Urban footprint available; no positive reference population for pollution modeling.` : entry.region;
     document.getElementById("city-set-status").textContent = "";
     const image = document.getElementById("city-preview-photo");
     const photo = window.PlanetCityPhotos?.get(entry.name);

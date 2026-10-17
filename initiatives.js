@@ -15,7 +15,7 @@
   const addressCache = new Map();
   const hotspotIcon = (draft = false) => L.divIcon({
     className: `initiative-pin${draft ? " initiative-pin-draft" : ""}`,
-    html: '<span class="initiative-pin-symbol" aria-hidden="true">✦</span>',
+    html: '<span class="initiative-pin-symbol" aria-hidden="true">+</span>',
     iconSize: [34, 42], iconAnchor: [17, 40], tooltipAnchor: [0, -38],
   });
   const uuid = () => crypto.randomUUID();
@@ -174,7 +174,10 @@
       let results = addressCache.get(query);
       if (!results) {
         state.lastLookup = Date.now();
-        const params = new URLSearchParams({ q: query, format: "jsonv2", limit: "5", countrycodes: "ca,us,mx" });
+        const params = new URLSearchParams({
+          q: query, format: "jsonv2", limit: "5",
+          countrycodes: "us,ca,mx,gl,bm,pm,gt,bz,sv,hn,ni,cr,pa,cu,jm,ht,do,bs,tc,ky,pr,vi,vg,ai,kn,ag,ms,gp,mf,bl,dm,mq,lc,vc,bb,gd,tt,aw,cw,bq,sx,co,ve,gy,sr,gf,ec,pe,bo,br,py,cl,ar,uy,fk",
+        });
         const response = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, { signal: controller.signal });
         if (!response.ok) throw new Error("Address lookup is unavailable. Please try again later or choose a spot on the map.");
         results = await response.json();

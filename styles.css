@@ -26,7 +26,7 @@ body {
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
   max-width: 340px;
   width: 320px;
-  max-height: calc(100dvh - 44px);
+  max-height: calc(100dvh - 110px);
   overflow-y: auto;
   scrollbar-width: thin;
 }
@@ -462,12 +462,12 @@ body {
 .chat-messages time { display: block; margin-top: 3px; color: #9aafbb; font-size: 10px; }
 .chat-messages p { margin: 5px 0; }
 .initiative-pin {
-  background: linear-gradient(145deg, #36d4b2, #087f79); border: 2px solid #f0fffb;
+  background: #159782; border: 2px solid #fff;
   border-radius: 18px 18px 18px 4px; color: #fff;
-  box-shadow: 0 3px 10px #032c3180, inset 0 1px 2px #ffffff55;
+  box-shadow: 0 2px 5px #0005;
   display: grid; place-items: center;
 }
-.initiative-pin-symbol { display: grid; place-items: center; width: 25px; height: 25px; border-radius: 50%; background: #ffffff24; font-size: 24px; line-height: 1; text-shadow: 0 1px 2px #045e5b80; }
+.initiative-pin-symbol { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: #ffffff24; color: #fff; font-size: 24px; line-height: 1; text-shadow: 0 1px 2px #045e5b80; }
 .initiative-pin-draft { border-style: dashed; }
 @media (pointer: fine) {
   .report-picking, .report-picking .leaflet-interactive, .report-picking.leaflet-grab { cursor: crosshair; }
@@ -617,4 +617,10 @@ body {
   #category-panel { max-height: 40%; }
   #initiative-panel .initiative-head { padding: 12px; }
   #initiative-body { padding: 0 12px 14px; }
+}
+
+/* Reserve a clear left-hand column for the native bottom-left zoom control. */
+.leaflet-control-attribution { max-width: calc(100vw - 70px); }
+@media (max-width: 700px) {
+  #right-rail { width: min(360px, calc(100vw - 70px)); }
 }

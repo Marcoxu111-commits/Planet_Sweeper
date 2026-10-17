@@ -1,5 +1,5 @@
 /*
-  Generates data/coast.js — the true coastline (in lat/lng) of the North America
+  Generates data/coast.js — the true coastline (in lat/lng) of the Americas
   view, extracted from Natural Earth 50m land polygons (world-atlas, public
   domain).
 
@@ -16,7 +16,7 @@
   Pipeline:
     1. Download land-50m TopoJSON.
     2. Decode arcs -> polygons (skipping tiny islands < 50 km²).
-    3. Keep polygons inside the mapped North America box.
+    3. Keep polygons inside the mapped Americas box (excluding Iceland).
     4. Round coordinates; normalise ring winding to CCW.
 */
 const fs = require("fs");
@@ -31,7 +31,7 @@ const R_EARTH = 6371000; // m
 function fetchJSON(url) {
   return new Promise((resolve, reject) => {
     https
-      .get(url, { headers: { "User-Agent": "node" } }, (res) => {
+      .get(url, { agent: false, headers: { "User-Agent": "node" } }, (res) => {
         if (res.statusCode !== 200) {
           res.resume();
           return reject(new Error("HTTP " + res.statusCode + " for " + url));
@@ -111,8 +111,9 @@ function signedArea(ringLL) {
 
 const round = (v, dec) => Math.round(v * Math.pow(10, dec)) / Math.pow(10, dec);
 
-// Keep only the North America view: US, Canada, Mexico, Central America, Caribbean.
-const isNA = (lat, lng) => lat > 6.5 && lat < 72 && lng < -50 && lng > -170;
+// Covers North/Central/South America, the Caribbean, Greenland, and nearby
+// American islands. Iceland is not part of the Americas.
+const isAmericas = (lat, lng) => lat > -58 && lat < 84 && lng < -10 && lng > -170 && !(lat > 59 && lat < 69 && lng > -30);
 
 async function main() {
   console.log("Fetching land-50m TopoJSON ...");
@@ -134,7 +135,7 @@ async function main() {
       const bb = bboxOf(outer);
       const cLat = (bb.minLat + bb.maxLat) / 2;
       const cLng = (bb.minLng + bb.maxLng) / 2;
-      if (!isNA(cLat, cLng)) { skippedFar++; continue; }
+      if (!isAmericas(cLat, cLng)) { skippedFar++; continue; }
       if (ringAreaKm2(outer) < 50) { skippedTiny++; continue; }
 
       // normalise to CCW so the land is always on the left of travel
@@ -157,7 +158,7 @@ async function main() {
   }
 
   const out =
-    `// True coastline of the mapped North America view.\n` +
+    `// True coastline of the mapped Americas view.\n` +
     `// Derived from Natural Earth land polygons (world-atlas, public domain), 50m.\n` +
     `// PJJ_COAST_RINGS = [[[lat,lng],...],...]; every ring is CCW, so the land\n` +
     `// (interior) is always to the left of travel and the sea to the right.\n` +

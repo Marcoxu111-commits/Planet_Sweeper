@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PJJ-2 — North America Litter &amp; Pollution Map</title>
+  <title>PJJ-2 — Americas Litter &amp; Pollution Map</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -11,9 +11,9 @@
   <div id="map"></div>
 
   <div id="main-panel" class="hud collapse-panel">
-    <div class="hud-heading"><h1>PJJ-2 <span>v1 — North America</span></h1><button class="panel-toggle" type="button" data-panel="main-panel" data-panel-name="City and initiatives" aria-controls="hud-body" aria-expanded="true" aria-label="Collapse city and initiatives">−</button></div>
+    <div class="hud-heading"><h1>PJJ-2 <span>v1 — Americas</span></h1><button class="panel-toggle" type="button" data-panel="main-panel" data-panel-name="City and initiatives" aria-controls="hud-body" aria-expanded="true" aria-label="Collapse city and initiatives">−</button></div>
     <div id="hud-body">
-    <p class="hud-intro">Explore your city. Turn a hotspot into a cleaner neighbourhood.</p>
+    <p class="hud-intro">North, Central &amp; South America and the Caribbean. Explore your city and make a local difference.</p>
     <div class="legend">
       <span id="legend-min">Low</span>
       <div class="gradient" id="legend-gradient"></div>
@@ -21,7 +21,7 @@
     </div>
     <form id="city-search" role="search" autocomplete="off">
       <label for="city-query">Find your city</label>
-      <input id="city-query" type="search" placeholder="Toronto, Mississauga, New York…"
+      <input id="city-query" type="search" placeholder="Toronto, Mexico City, São Paulo…"
         role="combobox" aria-autocomplete="list" aria-expanded="false"
         aria-controls="city-results" spellcheck="false" />
       <ul id="city-results" role="listbox" aria-label="Matching cities" hidden></ul>
@@ -100,7 +100,7 @@
       <div class="nearby-search-area"><span class="initiative-eyebrow">Your search area</span><p id="nearby-location-label">Set your city or choose a location.</p>
       <div class="initiative-actions"><button id="use-home-city" type="button">Use your city</button><button id="pick-volunteer-location" type="button">Address or map</button><button id="choose-volunteer-city" type="button">Find a city</button></div></div>
       <div class="nearby-filter"><label for="initiative-radius">Search radius</label>
-      <select id="initiative-radius"><option value="5">5 km</option><option value="10">10 km</option><option value="25" selected>25 km</option><option value="50">50 km</option><option value="100">100 km</option></select>
+      <select id="initiative-radius"><option value="5">5 km</option><option value="10">10 km</option><option value="25" selected>25 km</option><option value="50">50 km</option><option value="100">100 km</option><option value="250">250 km</option><option value="500">500 km</option></select>
       </div><p id="nearby-result-count" class="initiative-hint" role="status"></p>
       <div id="initiative-cards"></div>
     </section>
@@ -138,7 +138,7 @@
         <span class="cat-swatch water"></span>
         <span class="cat-text">
           <span class="cat-name">Water pollution</span>
-          <span class="cat-desc">Coastal sea pollution + major North American lakes. Cyan = clean to red = polluted.</span>
+          <span class="cat-desc">Coastal regions and lakes across the Americas. Cyan = clean to red = polluted. Indices are illustrative.</span>
         </span>
       </button>
       <button class="cat-option" data-cat="air">
@@ -157,6 +157,7 @@
   <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
   <script src="data/us_cities.js"></script>
   <script src="data/ca_cities.js"></script>
+  <script src="data/americas.js"></script>
   <script src="data/toronto_wards.js"></script>
   <script src="data/toronto_districts.js"></script>
   <script src="data/gta_regions.js"></script>

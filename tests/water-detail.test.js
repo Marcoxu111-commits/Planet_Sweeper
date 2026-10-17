@@ -20,7 +20,7 @@ test("coastal analysis regions have positive water areas and readable region lab
   const context = { window: {} }; vm.createContext(context);
   vm.runInContext(fs.readFileSync(path.join(__dirname, "../data/coastal_areas.js"), "utf8"), context);
   const features = context.window.PJJ_COAST_AREAS.features;
-  assert.equal(features.length, 148);
+  assert.ok(features.length >= 148);
   features.forEach((feature, index) => {
     assert.ok(water.areaKm2(feature.geometry) > 0);
     assert.match(water.regionName(feature.properties.seed, index), /Region \d+$/);

@@ -1,4 +1,4 @@
-// PJJ-2 v1 — North America pollution heat map.
+// PJJ-2 v1 — Americas pollution heat map.
 // Categories (right-side panel): land (waste), water (major lakes), air (CO₂).
 //
 // Boundaries: real ArcGIS feature services (data/*.geojson)
@@ -21,13 +21,24 @@ const LOGMAX = 2.0;  // land: 100 reports/km²/yr
 const AIR_LOGMIN = 3.3; // air: ~2,000 t CO₂/km²/yr
 const AIR_LOGMAX = 4.7; // air: ~50,000 t CO₂/km²/yr
 const CO2_PER_CAPITA = { US: 14.9, CA: 14.2 };
+const AMERICAS_COUNTRIES = new Map((window.PJJ_AMERICAS_COUNTRIES || []).map((country) => [country.code, country]));
+AMERICAS_COUNTRIES.forEach((country) => { CO2_PER_CAPITA[country.code] = country.co2PerCapita ?? 3.5; });
+
+function airFactorSource(country) {
+  if (country === "US" || country === "CA") return "EPA / Environment Canada per-capita averages";
+  const data = AMERICAS_COUNTRIES.get(country);
+  return data?.co2PerCapita != null
+    ? `World Bank 2022 national/sovereign per-capita CO₂ factor for ${data.co2FactorCode || country} (${data.co2PerCapita.toFixed(2)} t/person/year). Applied to Natural Earth reference population; not measured city emissions.`
+    : "Illustrative fallback of 3.5 t CO₂/person/year; no national factor was available. Not measured city emissions.";
+}
 
 let CATEGORY = "land";
 
-const map = L.map("map", { zoomControl: true, preferCanvas: true }).setView([43.2, -95], 5);
+const map = L.map("map", { zoomControl: true, preferCanvas: true }).setView([12, -85], 3);
+map.zoomControl.setPosition("bottomleft");
 
 L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
-  attribution: "Imagery &copy; Esri &mdash; Boundaries: US DOT BTS, StatCan, City of Toronto, City of Markham &mdash; Litter data: NYC/Chicago/LA/Toronto 311",
+  attribution: "Imagery &copy; Esri &mdash; Boundaries: US DOT BTS, StatCan, Ontario, Toronto, Natural Earth (public domain) &mdash; CO₂ factors: World Bank 2022 &mdash; Litter: NYC/Chicago/LA/Toronto 311; other areas modeled",
   maxZoom: 18,
 }).addTo(map);
 
@@ -155,8 +166,11 @@ const LAKE_POLLUTION = {
   "Lake Nipigon": 30, "Lake Athabasca": 28, "Great Bear Lake": 12, "Great Slave Lake": 14,
 };
 
-function lakeIndex(name) {
+function lakeIndex(name, modeledIndex) {
   if (LAKE_POLLUTION[name] != null) return LAKE_POLLUTION[name];
+  if (Number.isFinite(modeledIndex)) return modeledIndex;
+  const extra = window.PJJ_AMERICAS_LAKES?.features.find((feature) => feature.properties.NAME === name);
+  if (Number.isFinite(extra?.properties.modeledIndex)) return extra.properties.modeledIndex;
   return Math.round(25 + hash(name) * 50);
 }
 
@@ -266,7 +280,21 @@ const airWardPoints = [];               // air smoke wards: [lat, lng, intensity
   airPoints.push([centroidOf(f.geometry)[0], centroidOf(f.geometry)[1], logT(modeledAirMetric("CA", p.population, p.landarea), AIR_LOGMIN, AIR_LOGMAX), p.landarea]);
 });
 
-function buildCityPolygons(feature, name, sub, landMetric, areaKm2, population, landSource, landExtra, realInfo, country) {
+// Coarser supplementary coverage outside the existing US/Canada datasets. Do
+// not invent circular regions for cities whose source has only a point location.
+(window.PJJ_AMERICAS_CITIES?.features || []).forEach((feature) => {
+  const p = feature.properties;
+  if (p.locationOnly || !p.areaKm2 || !p.population) return;
+  const metric = modeledLandMetric(p.name, p.population, p.areaKm2);
+  buildCityPolygons(feature, p.name, `${p.countryName} — Natural Earth urban footprint`, metric,
+    p.areaKm2, p.population, p.source, "Urban footprint matched to a nearby named populated place. This is not an official municipal boundary or measured litter count.", null, p.country,
+    { populationEstimated: true });
+  const [lng, lat] = p.center;
+  heatPoints.push([lat, lng, logT(metric, LOGMIN, LOGMAX), p.areaKm2]);
+  airPoints.push([lat, lng, logT(modeledAirMetric(p.country, p.population, p.areaKm2), AIR_LOGMIN, AIR_LOGMAX), p.areaKm2]);
+});
+
+function buildCityPolygons(feature, name, sub, landMetric, areaKm2, population, landSource, landExtra, realInfo, country, options = {}) {
   const landPoly = L.geoJSON(feature, { style: () => baseStyleLand(landMetric) }).getLayers()[0];
   landPoly.bindTooltip(
     `<strong>${name}</strong><br>` +
@@ -279,7 +307,7 @@ function buildCityPolygons(feature, name, sub, landMetric, areaKm2, population, 
   landPoly.on("click", () => {
     setCategory("land");
     showPanel({
-      name, sub, metric: landMetric, areaKm2, population, popEstimated: false,
+      name, sub, metric: landMetric, areaKm2, population, popEstimated: !!options.populationEstimated,
       real: !!realInfo, reports: realInfo && realInfo.reports, period: realInfo && realInfo.period,
       source: landSource, extra: landExtra,
     });
@@ -300,8 +328,8 @@ function buildCityPolygons(feature, name, sub, landMetric, areaKm2, population, 
     setCategory("air");
     showPanel({
       name, sub: sub + " — CO₂ (modeled)", metric: airMetric, total: population * CO2_PER_CAPITA[country],
-      areaKm2, population, popEstimated: false, real: false,
-      source: `Modeled: population × per-capita CO₂ (${CO2_PER_CAPITA[country]} t/yr, EPA / Env. Canada averages)`,
+      areaKm2, population, popEstimated: !!options.populationEstimated, real: false,
+      source: `Modeled: population × per-capita CO₂ (${CO2_PER_CAPITA[country]} t/person/year). ${airFactorSource(country)}`,
     });
   });
   airCityLayer.addLayer(airPoly);
@@ -361,13 +389,16 @@ function severityLabelAir(metric) {
 // ---------- Lakes (water category) ----------
 // The source repeats seven complete lake outlines. Rendering both would double
 // the gradient opacity, so use one outline per named lake.
-const waterLakeFeatures = [...new Map((window.PJJ_LAKES.features || []).map((feature) => [feature.properties.NAME, feature])).values()];
+const originalLakeFeatures = [...new Map((window.PJJ_LAKES.features || []).map((feature) => [feature.properties.NAME, feature])).values()];
+// Supplementary lakes may share a name or have separate reservoir arms. Keep
+// every source geometry rather than dropping distinct bodies with the same name.
+const waterLakeFeatures = [...originalLakeFeatures, ...(window.PJJ_AMERICAS_LAKES?.features || [])];
 waterLakeFeatures.forEach((f) => {
   const p = f.properties;
   // The source's AREA column is in square miles, not km². Measure the displayed
   // geographic polygon instead of relabeling those values as square kilometres.
   const areaKm2 = PlanetWater.areaKm2(f.geometry);
-  const idx = lakeIndex(p.NAME);
+  const idx = lakeIndex(p.NAME, p.modeledIndex);
   // The gradient supplies the fill. Keep these paths as outlines/click targets.
   const lakeStyle = () => ({ ...baseStyleWater(idx), fillOpacity: 0 });
   const poly = L.geoJSON(f, { style: lakeStyle }).getLayers()[0];
@@ -381,13 +412,13 @@ waterLakeFeatures.forEach((f) => {
   poly.on("click", () => {
     setCategory("water");
     showPanel({
-      name: p.NAME, sub: "Major North American lake", metric: idx, areaKm2,
+      name: p.NAME, sub: p.source ? "Americas lake / reservoir — Natural Earth" : "Major North American lake", metric: idx, areaKm2,
       population: null, real: false,
       waterDataLabel: LAKE_POLLUTION[p.NAME] != null ? "Curated illustrative index" : "Modeled lake index",
       extra: "Within-lake colour variation is illustrative, not location-specific water sampling. The index is not a measured contaminant concentration.",
-      source: LAKE_POLLUTION[p.NAME] != null
+      source: p.source || (LAKE_POLLUTION[p.NAME] != null
         ? "Index anchored to documented water quality (EPA / DFO / news-documented status)"
-        : "Modeled index (no curated water-quality data)",
+        : "Modeled index (no curated water-quality data)"),
     });
   });
   lakesLayer.addLayer(poly);
@@ -427,9 +458,11 @@ function coastStrength(lat, lng) {
     const d = Math.hypot((lat - hlat) * 111, (lng - hlng) * 111 * Math.cos((lat * Math.PI) / 180));
     if (d < r) hot = Math.max(hot, s * (1 - d / r));
   }
-  // Modeled regional variation, not measured coastal water-quality data.
-  let s = 0.06 + 0.7 * hot;
-  s += 0.48 * coastNoise(lat, lng, 0.13) + 0.22 * coastNoise(lat, lng, 0.5);
+  // Modeled regional variation, not measured coastal water-quality data. Arctic
+  // offshore areas are treated as very clean; no Arctic hotspot is defined.
+  if (lat > 72) return 0.02;
+  let s = 0.05 + 0.65 * hot;
+  s += 0.42 * coastNoise(lat, lng, 0.13) + 0.2 * coastNoise(lat, lng, 0.5);
   return Math.max(0.03, Math.min(1, s));
 }
 
@@ -494,7 +527,7 @@ const CoastalGradient = L.GridLayer.extend({
 // A world-aligned gradient for each lake, clipped to its exact polygon. Unlike
 // a heat kernel, this cannot add a circular glow or blur onto neighbouring land.
 const lakeGradientFeatures = waterLakeFeatures.map((feature) => ({
-  feature, box: PlanetWater.bounds(feature.geometry), index: lakeIndex(feature.properties.NAME),
+  feature, box: PlanetWater.bounds(feature.geometry), index: lakeIndex(feature.properties.NAME, feature.properties.modeledIndex),
 }));
 const LakeGradient = L.GridLayer.extend({
   createTile(coords) {
@@ -509,7 +542,7 @@ const LakeGradient = L.GridLayer.extend({
       const se = map.project([box[1], box[2]], coords.z).subtract(origin);
       if (se.x < 0 || nw.x > size || se.y < 0 || nw.y > size) continue;
       const gradient = ctx.createLinearGradient(nw.x, nw.y, se.x, se.y);
-      for (const [position, variation] of [[0, -0.12], [0.5, 0], [1, 0.1]]) {
+      for (const [position, variation] of [[0, -0.08], [0.5, 0], [1, 0.06]]) {
         gradient.addColorStop(position, `rgb(${coastRGB(index / 100 + variation).join(",")})`);
       }
       ctx.fillStyle = gradient;
@@ -546,7 +579,7 @@ function buildCoastBands() {
     pane.style.pointerEvents = "none";
   }
   const gradient = new CoastalGradient({
-    pane: "coastalGradient", tileSize: 256, bounds: [[7, -170], [72, -50]],
+    pane: "coastalGradient", tileSize: 256, bounds: [[-58, -170], [84, -10]],
     noWrap: true, updateWhenIdle: true,
   });
   const outline = L.geoJSON(window.PJJ_COAST_MASK, {

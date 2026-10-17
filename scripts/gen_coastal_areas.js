@@ -31,13 +31,13 @@ async function main() {
   console.log("Buffering shoreline 130 km out to sea...");
   const expanded = turf.buffer(land, 130, { units: "kilometers", steps: 24 });
   const sea = turf.difference(turf.featureCollection([expanded, land]));
-  const bounds = [-170, 7, -50, 72];
+  const bounds = [-170, -58, -10, 84];
   // Widely spaced coastal seeds form broad, natural-looking regions rather than
   // tiny shards. All regions are clipped to the same continuous sea-only band.
   const seeds = [];
   for (const ring of context.window.PJJ_COAST_RINGS) {
     for (const [lat, lng] of ring) {
-      if (lat < 7 || lat > 72 || lng < -170 || lng > -50) continue;
+      if (lat < bounds[1] || lat > bounds[3] || lng < bounds[0] || lng > bounds[2]) continue;
       const p = turf.point([lng, lat]);
       if (seeds.every((q) => turf.distance(p, q) > 280)) seeds.push(p);
     }
