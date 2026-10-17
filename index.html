@@ -22,23 +22,28 @@
   </div>
 
   <div id="category-panel">
-    <button id="cat-header" class="cat-header">
-      <span class="cat-header-label">Pollution layers</span>
-      <span id="cat-header-current">Trash pollution</span>
-      <span id="cat-header-arrow" class="cat-arrow">&#9662;</span>
-    </button>
-    <div id="cat-list" class="cat-list">
+    <div class="cat-title">Pollution layers</div>
+    <div class="cat-list">
       <button class="cat-option active" data-cat="land">
         <span class="cat-swatch land"></span>
-        <span class="cat-text"><span class="cat-name">Trash pollution</span><span class="cat-desc">Land litter — 311 reports</span></span>
+        <span class="cat-text">
+          <span class="cat-name">Trash pollution</span>
+          <span class="cat-desc">Land litter &amp; illegal dumping. Real 311 reports per km², green = low to red = high.</span>
+        </span>
       </button>
       <button class="cat-option" data-cat="water">
         <span class="cat-swatch water"></span>
-        <span class="cat-text"><span class="cat-name">Water pollution</span><span class="cat-desc">Major North American lakes</span></span>
+        <span class="cat-text">
+          <span class="cat-name">Water pollution</span>
+          <span class="cat-desc">All major North American lakes. Dark blue = clean to maroon = polluted.</span>
+        </span>
       </button>
       <button class="cat-option" data-cat="air">
         <span class="cat-swatch air"></span>
-        <span class="cat-text"><span class="cat-name">Air pollution</span><span class="cat-desc">CO₂ tonnes (smoke effect)</span></span>
+        <span class="cat-text">
+          <span class="cat-name">Air pollution</span>
+          <span class="cat-desc">CO₂ tonnes per km² per year. Yellow smoke = high emissions, clear = low.</span>
+        </span>
       </button>
     </div>
   </div>

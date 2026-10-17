@@ -515,8 +515,6 @@ function setCategory(cat) {
   document.querySelectorAll(".cat-option").forEach((b) =>
     b.classList.toggle("active", b.dataset.cat === cat)
   );
-  const label = document.querySelector(`.cat-option[data-cat="${cat}"] .cat-name`);
-  document.getElementById("cat-header-current").textContent = label ? label.textContent : cat;
   applyCategory();
   updateLegend();
 }
@@ -555,19 +553,11 @@ function applyCategory() {
 
 map.on("zoomend", () => { if (CATEGORY !== "water") applyCategory(); });
 
-// wire up the right-side dropdown menu
-const catPanelEl = document.getElementById("category-panel");
-document.getElementById("cat-header").addEventListener("click", () => {
-  catPanelEl.classList.toggle("open");
-});
+// wire up the permanent category panel (bottom-right)
 document.querySelectorAll(".cat-option").forEach((b) => {
-  b.addEventListener("click", () => {
-    setCategory(b.dataset.cat);
-    catPanelEl.classList.remove("open");
-  });
+  b.addEventListener("click", () => setCategory(b.dataset.cat));
 });
 
 map.whenReady(() => {
   setCategory("land");
-  catPanelEl.classList.add("open"); // start expanded so the options are discoverable
 });
