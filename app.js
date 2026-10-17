@@ -47,7 +47,8 @@ function colorLand(metric) {
 
 function colorWater(idx) {
   const t = Math.pow(clamp(idx / 100, 0, 1), 0.8);
-  return `hsl(${Math.round(220 - 220 * t)}, 85%, ${Math.round(52 - 8 * t)}%)`;
+  // dark blue (hue 240) -> violet -> maroon (#800000 at hue 360)
+  return `hsl(${Math.round(240 + 120 * t)}, 85%, ${Math.round(30 - 5 * t)}%)`;
 }
 
 function severityLabel(metric) {
@@ -445,15 +446,16 @@ const AIR_GRADIENT = {
 
 let heatLayers = [];
 
-function heatRadiusPx(km2, mpp, mult) {
+function heatRadiusPx(km2, mpp, mult, maxPx) {
   const rM = Math.sqrt((km2 * 1e6) / Math.PI) * (mult || 1.15);
-  return clamp(rM / mpp, 6, 120);
+  return clamp(rM / mpp, 6, maxPx || 120);
 }
 
 function buildGlow(points, gradient, areaMult, maxOpacity) {
   if (typeof L.heatLayer !== "function") return;
   const zoom = map.getZoom();
   const mpp = (156543.03392 * Math.cos((map.getCenter().lat * Math.PI) / 180)) / Math.pow(2, zoom);
+  const isAir = CATEGORY === "air";
   const buckets = { small: [], medium: [], large: [] };
   points.forEach(([lat, lng, i, km2]) => {
     if (km2 >= 800) buckets.large.push([lat, lng, i]);
@@ -461,18 +463,18 @@ function buildGlow(points, gradient, areaMult, maxOpacity) {
     else buckets.small.push([lat, lng, i]);
   });
   const radii = {
-    small: heatRadiusPx(60, mpp, areaMult),
-    medium: heatRadiusPx(400, mpp, areaMult),
-    large: heatRadiusPx(3500, mpp, areaMult),
+    small: heatRadiusPx(60, mpp, areaMult, isAir ? 160 : 120),
+    medium: heatRadiusPx(400, mpp, areaMult, isAir ? 260 : 160),
+    large: heatRadiusPx(3500, mpp, areaMult, isAir ? 380 : 200),
   };
   Object.keys(buckets).forEach((k) => {
     if (!buckets[k].length) return;
     const layer = L.heatLayer(buckets[k], {
       radius: radii[k],
-      blur: CATEGORY === "air" ? 0.95 : 0.85,
-      maxZoom: 12,
+      blur: isAir ? 0.9 : 0.85,
+      maxZoom: 18, // no intensity damping — glow strength handled here
       maxOpacity,
-      minOpacity: CATEGORY === "air" ? 0 : 0.06,
+      minOpacity: isAir ? 0.04 : 0.06,
       gradient,
     });
     heatLayers.push(layer);
@@ -486,7 +488,7 @@ function rebuildGlows() {
   heatLayers = [];
   if (map.getZoom() < 3) return;
   if (CATEGORY === "land") buildGlow(heatPoints, LAND_GRADIENT, 1.15, 0.85);
-  if (CATEGORY === "air") buildGlow(airPoints.concat(airWardPoints), AIR_GRADIENT, 1.35, 0.9);
+  if (CATEGORY === "air") buildGlow(airPoints.concat(airWardPoints), AIR_GRADIENT, 1.6, 0.95);
 }
 map.on("zoomend", rebuildGlows);
 
@@ -497,7 +499,7 @@ const legendGradient = document.getElementById("legend-gradient");
 
 const LEGENDS = {
   land: { min: "Low", max: "High", css: "linear-gradient(to right, #00c853, #ffd600, #d50000)" },
-  water: { min: "Clean (blue)", max: "Polluted (red)", css: "linear-gradient(to right, #1e63e9, #ffd600, #d50000)" },
+  water: { min: "Clean (dark blue)", max: "Polluted (maroon)", css: "linear-gradient(to right, #0d1e6e, #5b2a86, #800000)" },
   air: { min: "Clear", max: "Smoky (high CO₂)", css: "linear-gradient(to right, rgba(255,235,0,0), #ffe100, #ff9600)" },
 };
 
@@ -513,6 +515,8 @@ function setCategory(cat) {
   document.querySelectorAll(".cat-option").forEach((b) =>
     b.classList.toggle("active", b.dataset.cat === cat)
   );
+  const label = document.querySelector(`.cat-option[data-cat="${cat}"] .cat-name`);
+  document.getElementById("cat-header-current").textContent = label ? label.textContent : cat;
   applyCategory();
   updateLegend();
 }
@@ -551,11 +555,19 @@ function applyCategory() {
 
 map.on("zoomend", () => { if (CATEGORY !== "water") applyCategory(); });
 
-// wire up the right-side options panel
+// wire up the right-side dropdown menu
+const catPanelEl = document.getElementById("category-panel");
+document.getElementById("cat-header").addEventListener("click", () => {
+  catPanelEl.classList.toggle("open");
+});
 document.querySelectorAll(".cat-option").forEach((b) => {
-  b.addEventListener("click", () => setCategory(b.dataset.cat));
+  b.addEventListener("click", () => {
+    setCategory(b.dataset.cat);
+    catPanelEl.classList.remove("open");
+  });
 });
 
 map.whenReady(() => {
   setCategory("land");
+  catPanelEl.classList.add("open"); // start expanded so the options are discoverable
 });
