@@ -187,6 +187,14 @@ body {
   font-weight: 400;
 }
 
+#info-panel-body .row.real strong {
+  color: #7ccb3a;
+}
+
+#info-panel-body .row.estrow strong {
+  color: #ffd600;
+}
+
 #info-panel-body .extra {
   margin: 8px 0 0;
   font-size: 12px;
