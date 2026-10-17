@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PJJ-2 — North America Litter &amp; Pollution Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="map"></div>
+
+  <div class="hud">
+    <h1>PJJ-2 <span>v1 — North America</span></h1>
+    <p>Faded heat map over satellite imagery. Every North American city — 2,646 US urban areas + 1,030 Canadian population centres. Sample litter density (t/km²), hover for details.</p>
+    <p class="hint">The <strong>GTA</strong> gets ward-level detail: zoom into <strong>Toronto</strong> or <strong>Markham</strong>.</p>
+    <div class="legend">
+      <span>Low</span>
+      <div class="gradient"></div>
+      <span>High</span>
+    </div>
+  </div>
+
+  <div id="info-panel">
+    <div class="panel-head">
+      <span>Region details</span>
+      <button id="info-panel-close" aria-label="Close">&times;</button>
+    </div>
+    <div id="info-panel-body"></div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+  <script src="data/us_cities.js"></script>
+  <script src="data/ca_cities.js"></script>
+  <script src="data/toronto_wards.js"></script>
+  <script src="data/markham_wards.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
