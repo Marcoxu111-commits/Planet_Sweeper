@@ -89,6 +89,93 @@ body {
   pointer-events: none !important;
 }
 
+/* ---------- Right-side category options panel ---------- */
+#category-panel {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1100;
+  width: 230px;
+  background: rgba(15, 18, 22, 0.92);
+  color: #eee;
+  border-radius: 10px;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+
+.cat-title {
+  padding: 10px 14px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #9ab;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.cat-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 14px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+}
+
+.cat-option:last-child {
+  border-bottom: none;
+}
+
+.cat-option:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.cat-option.active {
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: inset 3px 0 0 #ffd600;
+}
+
+.cat-swatch {
+  flex: 0 0 22px;
+  height: 22px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.cat-swatch.land {
+  background: linear-gradient(135deg, #00c853, #ffd600, #d50000);
+}
+
+.cat-swatch.water {
+  background: linear-gradient(135deg, #1e63e9, #00bcd4, #d50000);
+}
+
+.cat-swatch.air {
+  background: linear-gradient(135deg, rgba(255, 235, 0, 0.05), #ffe100, #ff9600);
+}
+
+.cat-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.cat-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.cat-desc {
+  font-size: 11px;
+  color: #9ab;
+}
+
 #info-panel {
   position: absolute;
   left: 10px;

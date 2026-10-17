@@ -15,10 +15,26 @@
     <p>Faded heat map over satellite imagery. Every North American city — 2,646 US urban areas + 1,030 Canadian population centres. Sample litter density (t/km²), hover for details.</p>
     <p class="hint">The <strong>GTA</strong> gets ward-level detail: zoom into <strong>Toronto</strong> or <strong>Markham</strong>.</p>
     <div class="legend">
-      <span>Low</span>
-      <div class="gradient"></div>
-      <span>High</span>
+      <span id="legend-min">Low</span>
+      <div class="gradient" id="legend-gradient"></div>
+      <span id="legend-max">High</span>
     </div>
+  </div>
+
+  <div id="category-panel">
+    <div class="cat-title">Pollution layers</div>
+    <button class="cat-option active" data-cat="land">
+      <span class="cat-swatch land"></span>
+      <span class="cat-text"><span class="cat-name">Trash pollution</span><span class="cat-desc">Land litter — 311 reports</span></span>
+    </button>
+    <button class="cat-option" data-cat="water">
+      <span class="cat-swatch water"></span>
+      <span class="cat-text"><span class="cat-name">Water pollution</span><span class="cat-desc">Major North American lakes</span></span>
+    </button>
+    <button class="cat-option" data-cat="air">
+      <span class="cat-swatch air"></span>
+      <span class="cat-text"><span class="cat-name">Air pollution</span><span class="cat-desc">CO₂ tonnes (smoke effect)</span></span>
+    </button>
   </div>
 
   <div id="info-panel">
@@ -35,6 +51,7 @@
   <script src="data/ca_cities.js"></script>
   <script src="data/toronto_wards.js"></script>
   <script src="data/markham_wards.js"></script>
+  <script src="data/lakes.js"></script>
   <script src="data/real_litter.js"></script>
   <script src="app.js"></script>
 </body>
