@@ -988,14 +988,14 @@ function buildGlow(points, gradient, areaMult, maxOpacity) {
   const radii = {};
   Object.keys(buckets).forEach((k) => {
     radii[k] = isAir
-      ? clamp(Math.sqrt(Math.pow(10, Number(k) + 0.5)) * 1.1, 12, 110)
+      ? clamp(Math.sqrt(Math.pow(10, Number(k) + 0.5)) * 0.9, 10, 90)
       : heatRadiusPx(Math.pow(10, Number(k) + 0.5), mpp, areaMult, 200);
   });
   Object.keys(buckets).forEach((k) => {
     if (!buckets[k].length) return;
     const layer = L.heatLayer(buckets[k].map((p) => [p[0], p[1], p[2]]), {
       radius: radii[k],
-      blur: isAir ? Math.max(12, radii[k] * 0.9) : Math.max(12, radii[k] * 0.85),
+      blur: isAir ? Math.max(8, radii[k] * 0.55) : Math.max(12, radii[k] * 0.85),
       // NOTE: leaflet.heat scales every point's intensity by
       // 1 / 2^(maxZoom - zoom). With maxZoom pinned to 18 that factor hit
       // 1/4096 at low zoom and pushed every point under minOpacity, so the
@@ -1027,9 +1027,10 @@ function rebuildGlows() {
   heatLayers.forEach((l) => map.removeLayer(l));
   heatLayers = [];
   if (CATEGORY === "air") {
-    // Country haze is carried by the polygon fills (countriesAirLayer) at EVERY
-    // zoom. Smoke kernels only add glow over the city/ward layers.
-    if (map.getZoom() > 4) buildGlow(airPoints.concat(airWardPoints), AIR_GRADIENT, 1.0, 0.5);
+    // Country haze is carried by the polygon fills (countriesAirLayer) at every
+    // zoom. City-level smoke kernels render at EVERY zoom too, with fixed
+    // pixel size and opacity, so the detail never disappears zoomed out.
+    buildGlow(airPoints.concat(airWardPoints), AIR_GRADIENT, 1.0, 0.45);
     return;
   }
   if (CATEGORY === "land") buildGlow(heatPoints, LAND_GRADIENT, 1.15, maxOpacityForZoom(map.getZoom()));
