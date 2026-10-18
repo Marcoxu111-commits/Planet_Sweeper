@@ -963,17 +963,19 @@ function buildGlow(points, gradient, areaMult, maxOpacity) {
   if (zoom >= DETAIL_ZOOM - 1 && CATEGORY !== "air") return;
   const mpp = (156543.03392 * Math.cos((map.getCenter().lat * Math.PI) / 180)) / Math.pow(2, zoom);
   const isAir = CATEGORY === "air";
-  const buckets = { small: [], medium: [], large: [] };
+  // Log-area bucketing: region sizes span orders of magnitude (a city ward to
+  // Russia), so each decade of area gets its own kernel sized from that
+  // decade's representative area. Fixed small/medium/large buckets collapsed
+  // every country to the minimum radius at world zoom, hiding the haze.
+  const buckets = {};
   points.forEach(([lat, lng, i, km2]) => {
-    if (km2 >= 800) buckets.large.push([lat, lng, i]);
-    else if (km2 >= 150) buckets.medium.push([lat, lng, i]);
-    else buckets.small.push([lat, lng, i]);
+    const key = clamp(Math.floor(Math.log10(Math.max(km2, 10))), 2, 8);
+    (buckets[key] = buckets[key] || []).push([lat, lng, i, km2]);
   });
-  const radii = {
-    small: heatRadiusPx(60, mpp, areaMult, isAir ? 220 : 120),
-    medium: heatRadiusPx(400, mpp, areaMult, isAir ? 320 : 160),
-    large: heatRadiusPx(3500, mpp, areaMult, isAir ? 450 : 200),
-  };
+  const radii = {};
+  Object.keys(buckets).forEach((k) => {
+    radii[k] = heatRadiusPx(Math.pow(10, Number(k) + 0.5), mpp, areaMult, isAir ? 450 : 200);
+  });
   Object.keys(buckets).forEach((k) => {
     if (!buckets[k].length) return;
     const layer = L.heatLayer(buckets[k].map((p) => [p[0], p[1], p[2]]), {
