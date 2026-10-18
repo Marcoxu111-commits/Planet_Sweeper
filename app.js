@@ -533,7 +533,10 @@ const countriesGreyLayer = L.layerGroup(); // countries with no publicized waste
         (managementRisk ? `${managementRisk.lowerBound ? "At least " : ""}${(managementRisk.share * 100).toFixed(1)}% reported unmanaged` : "No comparable management estimate") + "<br><em>Generation is not a street-litter measurement</em>",
       { sticky: true, className: "pjj-tip" }
     );
-    poly.on("mouseover", () => poly.setStyle({ ...style(), stroke: true, color: "#fff", weight: 2 }).bringToFront());
+    // No bringToFront here: country polygons stay UNDER region/city layers so
+    // hovering a region always surfaces the region's details, and countries
+    // only respond where no regional heatmap covers the point.
+    poly.on("mouseover", () => poly.setStyle({ ...style(), stroke: true, color: "#fff", weight: 2 }));
     poly.on("mouseout", () => poly.setStyle(style()));
     poly.on("click", () => {
       setCategory("land");
@@ -569,7 +572,7 @@ const countriesGreyLayer = L.layerGroup(); // countries with no publicized waste
         `${fmtInt(metric)} t/km²/yr — national density: ${severityLabelAirCountry(metric)}`,
       { sticky: true, className: "pjj-tip" }
     );
-    poly.on("mouseover", () => poly.setStyle({ ...style(), stroke: true, color: "#ffd600", weight: 1.2, fillOpacity: Math.min(0.45, style().fillOpacity + 0.08) }).bringToFront());
+    poly.on("mouseover", () => poly.setStyle({ ...style(), stroke: true, color: "#ffd600", weight: 1.2, fillOpacity: Math.min(0.45, style().fillOpacity + 0.08) }));
     poly.on("mouseout", () => poly.setStyle(style()));
     poly.on("click", () => {
       setCategory("air");
@@ -595,7 +598,7 @@ const countriesGreyLayer = L.layerGroup(); // countries with no publicized waste
     });
     const grey = L.geoJSON(f, { style: greyStyle }).getLayers()[0];
     grey.bindTooltip(`<strong>${name}</strong><br>No publicized waste data`, { sticky: true, className: "pjj-tip" });
-    grey.on("mouseover", () => grey.setStyle({ ...greyStyle(), color: "#fff", weight: 2 }).bringToFront());
+    grey.on("mouseover", () => grey.setStyle({ ...greyStyle(), color: "#fff", weight: 2 }));
     grey.on("mouseout", () => grey.setStyle(greyStyle()));
     grey.on("click", () => {
       setCategory("land");
@@ -1096,6 +1099,14 @@ map.on("zoomend", () => { if (CATEGORY !== "water") applyCategory(); });
 // wire up the permanent category panel (bottom-right)
 document.querySelectorAll(".cat-option").forEach((b) => {
   b.addEventListener("click", () => setCategory(b.dataset.cat));
+});
+
+// ---------- Team logo: mission message ----------
+const teamLogoBtn = document.getElementById("team-logo-btn");
+const teamMessage = document.getElementById("team-message");
+teamLogoBtn.addEventListener("click", () => {
+  const open = teamMessage.classList.toggle("open");
+  teamLogoBtn.setAttribute("aria-expanded", String(open));
 });
 
 // ---------- Loading screen ----------

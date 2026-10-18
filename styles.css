@@ -767,3 +767,69 @@ body {
   color: #789;
   margin: 4px 0 0;
 }
+
+/* ---------- Team logo + mission message (above options panel) ---------- */
+#team-logo-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+#team-logo-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  line-height: 0;
+}
+
+#team-logo-btn img {
+  width: 92px;
+  height: 92px;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.55));
+  transition: transform 0.2s ease;
+}
+
+#team-logo-btn:hover img {
+  transform: scale(1.07);
+}
+
+.team-message {
+  width: 300px;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  margin-top: 0;
+  background: rgba(5, 7, 12, 0.78);
+  backdrop-filter: blur(5px);
+  border-radius: 12px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55);
+  color: #dfe8ef;
+  text-align: center;
+  transition: max-height 0.4s ease, opacity 0.3s ease, margin-top 0.3s ease;
+}
+
+.team-message.open {
+  max-height: 320px;
+  opacity: 1;
+  margin-top: 8px;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.team-message h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  color: #ffd600;
+  letter-spacing: 0.04em;
+}
+
+.team-message p {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.team-message p:last-child { margin-bottom: 0; }
