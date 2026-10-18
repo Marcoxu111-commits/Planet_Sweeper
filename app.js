@@ -37,10 +37,31 @@ let CATEGORY = "land";
 const map = L.map("map", { zoomControl: true, preferCanvas: true }).setView([12, -85], 3);
 map.zoomControl.setPosition("bottomleft");
 
-L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
-  attribution: "Imagery &copy; Esri &mdash; Boundaries: US DOT BTS, StatCan, Ontario, Toronto, Natural Earth (public domain) &mdash; CO₂ factors: World Bank 2022 &mdash; Litter: NYC/Chicago/LA/Toronto 311; other areas modeled",
-  maxZoom: 18,
-}).addTo(map);
+// Category basemaps: land = satellite imagery; water = navy-scale (oceans dark
+// blue, land near-black via CSS filter); air = NASA Black Marble night lights.
+const BASEMAPS = {
+  land: L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+    attribution: "Imagery &copy; Esri &mdash; Boundaries: US DOT BTS, StatCan, Ontario, Toronto, Natural Earth (public domain), Esri World Countries &mdash; CO₂ factors: World Bank 2022 &mdash; Litter: NYC/Chicago/LA/Toronto 311; waste stats: national statistics offices",
+    maxZoom: 18,
+  }),
+  water: L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", {
+    attribution: "Basemap &copy; Esri Dark Gray Canvas",
+    maxZoom: 16,
+    maxNativeZoom: 16,
+  }),
+  air: L.tileLayer("https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble/default/2016-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png", {
+    attribution: "Night lights: NASA Black Marble (VIIRS) via GIBS",
+    maxZoom: 18,
+    maxNativeZoom: 8,
+  }),
+};
+function setBasemap(cat) {
+  Object.entries(BASEMAPS).forEach(([key, layer]) => {
+    if (key === cat) { if (!map.hasLayer(layer)) map.addLayer(layer); }
+    else map.removeLayer(layer);
+  });
+  document.getElementById("map").classList.toggle("navy", cat === "water");
+}
 
 // ---------- Scales ----------
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -59,9 +80,9 @@ function colorLand(metric) {
 
 function colorWater(idx) {
   const t = Math.pow(clamp(idx / 100, 0, 1), 0.8);
-  // clean (cyan) -> amber -> red (polluted)
-  const hue = Math.round(195 * (1 - t));
-  return `hsl(${hue}, 88%, ${Math.round(55 - 15 * t)}%)`;
+  // dark blue (clean, hue 240) -> violet -> orange (polluted, hue 30)
+  const hue = Math.round((240 + 150 * t) % 360);
+  return `hsl(${hue}, 85%, ${Math.round(28 + 27 * t)}%)`;
 }
 
 function colorAir(metric) {
@@ -182,6 +203,18 @@ function fmtInt(n) {
   return Math.round(n).toLocaleString("en-CA");
 }
 
+function colorLandT(t) {
+  const te = Math.pow(t, 0.75);
+  return `hsl(${(52 * (1 - te)).toFixed(0)}, 95%, ${(52 - 8 * t).toFixed(0)}%)`;
+}
+
+function severityLabelWaste(t) {
+  if (t < 0.25) return "Low";
+  if (t < 0.5) return "Moderate";
+  if (t < 0.75) return "High";
+  return "Very High";
+}
+
 function sevColorFor(metric) {
   if (CATEGORY === "water") return colorWater(metric);
   if (CATEGORY === "air") {
@@ -196,7 +229,15 @@ function showPanel(d) {
     ? `${fmtInt(d.population)}${d.popEstimated ? ' <span class="est">(est.)</span>' : ""}`
     : "—";
   let rows = "";
-  if (CATEGORY === "water") {
+  if (d.countryLevel) {
+    rows = `
+      <div class="row"><span>Waste per km²</span><strong>${d.metric.toFixed(1)} t/km²/yr</strong></div>
+      <div class="row"><span>Total waste</span><strong>${fmtInt(d.wasteTotal)} t/yr</strong></div>
+      ${d.regionTotal != null ? `<div class="row"><span>${(d.sub || "").split(" — ")[0]} total</span><strong>${fmtInt(d.regionTotal)} t/yr</strong></div>` : ""}
+      ${d.regionAvg != null ? `<div class="row"><span>Region avg density</span><strong>${d.regionAvg.toFixed(1)} t/km²/yr</strong></div>` : ""}
+      <div class="row"><span>Year</span><strong>${d.year}</strong></div>
+      <div class="row"><span>Coverage</span><strong>${d.coverage}</strong></div>`;
+  } else if (CATEGORY === "water") {
     rows = `
       <div class="row"><span>${d.indexLabel || "Pollution index"}</span><strong>${d.metric.toFixed(0)} / 100</strong></div>
       <div class="row"><span>Area</span><strong>${d.areaKm2.toFixed(0)} km²</strong></div>`;
@@ -213,7 +254,11 @@ function showPanel(d) {
       <div class="row"><span>Population</span><strong>${popLine}</strong></div>
       <div class="row"><span>Area</span><strong>${d.areaKm2.toFixed(1)} km²</strong></div>`;
   }
-  const dataBadge = CATEGORY === "water"
+  const dataBadge = d.countryLevel
+    ? (d.real
+        ? `<div class="row real"><span>Data</span><strong>Official national statistics &middot; ${d.year}</strong></div>`
+        : `<div class="row estrow"><span>Data</span><strong>Estimate &middot; ${d.year}</strong></div>`)
+    : CATEGORY === "water"
     ? `<div class="row estrow"><span>Data</span><strong>${d.waterDataLabel || "Modeled estimate"}</strong></div>`
     : d.real
       ? `<div class="row real"><span>Data</span><strong>Real 311 reports &middot; ${d.period}</strong></div>`
@@ -221,7 +266,7 @@ function showPanel(d) {
   panelBody.innerHTML = `
     <h2>${d.name}</h2>
     <p class="sub">${d.sub}</p>
-    <div class="sev" style="background:${sevColorFor(d.metric)}">${severityLabel(d.metric)}</div>
+    <div class="sev" style="background:${d.countryLevel ? colorLandT(logT(d.metric, WASTE_LOGMIN, WASTE_LOGMAX)) : sevColorFor(d.metric)}">${d.countryLevel ? severityLabelWaste(logT(d.metric, WASTE_LOGMIN, WASTE_LOGMAX)) : severityLabel(d.metric)}</div>
     ${rows}
     ${dataBadge}
     ${d.extra ? `<p class="extra">${d.extra}</p>` : ""}
@@ -424,6 +469,108 @@ waterLakeFeatures.forEach((f) => {
   lakesLayer.addLayer(poly);
 });
 
+// ---------- World countries (waste by country, land + air categories) ----------
+const WASTE_LOGMIN = 0.6; // ~4 t/km²/yr
+const WASTE_LOGMAX = 4.0; // ~10,000 t/km²/yr
+const WORLD_WASTE = window.PJJ_WORLD_WASTE || {};
+const WORLD_AIR = window.PJJ_WORLD_AIR || {};
+const countriesLandLayer = L.layerGroup();
+const countriesAirLayer = L.layerGroup();
+const airCountryPoints = [];
+const REGION_STATS = {};
+
+(function () {
+  const areaByName = {};
+  (window.PJJ_COUNTRIES?.features || []).forEach((f) => {
+    areaByName[f.properties.COUNTRY] = f.properties.area_km2;
+  });
+  Object.entries(WORLD_WASTE).forEach(([name, d]) => {
+    const area = areaByName[name];
+    if (!area) return;
+    const density = d.waste_tonnes / area;
+    const s = (REGION_STATS[d.region] = REGION_STATS[d.region] || { total: 0, count: 0, sumDensity: 0, avgDensity: 0 });
+    s.total += d.waste_tonnes;
+    s.count += 1;
+    s.sumDensity += density;
+  });
+  Object.values(REGION_STATS).forEach((s) => { s.avgDensity = s.sumDensity / s.count; });
+})();
+
+(window.PJJ_COUNTRIES?.features || []).forEach((f) => {
+  const name = f.properties.COUNTRY;
+  if (name === "Antarctica") return;
+  const d = WORLD_WASTE[name];
+  const areaKm2 = f.properties.area_km2;
+  const centroid = centroidOf(f.geometry);
+
+  if (d && areaKm2) {
+    const metric = d.waste_tonnes / areaKm2;
+    const t = logT(metric, WASTE_LOGMIN, WASTE_LOGMAX);
+    const style = () => ({
+      renderer: canvasRenderer,
+      stroke: true,
+      color: "rgba(255, 255, 255, 0.4)",
+      weight: 0.6,
+      fillColor: colorLandT(t),
+      fillOpacity: 0.75,
+      smoothFactor: 2,
+    });
+    const stats = REGION_STATS[d.region];
+    const poly = L.geoJSON(f, { style }).getLayers()[0];
+    poly.bindTooltip(
+      `<strong>${name}</strong><br>Waste: <strong>${fmtInt(d.waste_tonnes)} t/yr</strong><br>` +
+        `${metric.toFixed(1)} t/km²/yr${d.estimate ? "<br><em>estimate — see source</em>" : ""}`,
+      { sticky: true, className: "pjj-tip" }
+    );
+    poly.on("mouseover", () => poly.setStyle({ ...style(), stroke: true, color: "#fff", weight: 2 }).bringToFront());
+    poly.on("mouseout", () => poly.setStyle(style()));
+    poly.on("click", () => {
+      setCategory("land");
+      showPanel({
+        name,
+        sub: `${d.region} — country waste`,
+        metric, metricLabel: "Waste per km²",
+        wasteTotal: d.waste_tonnes,
+        regionTotal: stats ? stats.total : null,
+        regionAvg: stats ? stats.avgDensity : null,
+        areaKm2, population: null, real: !d.estimate,
+        year: d.year, coverage: d.coverage,
+        source: d.source + (d.estimate ? " (estimate)" : ""),
+        countryLevel: true,
+      });
+    });
+    countriesLandLayer.addLayer(poly);
+  }
+
+  const co2Mt = WORLD_AIR[name];
+  if (co2Mt && areaKm2) {
+    const co2Tonnes = co2Mt * 1e6;
+    const metric = co2Tonnes / areaKm2;
+    airCountryPoints.push([centroid[0], centroid[1], logT(metric, AIR_LOGMIN, AIR_LOGMAX), areaKm2]);
+    const poly = L.geoJSON(f, { style: baseStyleAirInvisibleCountry }).getLayers()[0];
+    poly.bindTooltip(
+      `<strong>${name}</strong><br>CO₂: <strong>${fmtInt(co2Tonnes)} t/yr</strong> (Global Carbon Budget)<br>` +
+        `${fmtInt(metric)} t/km²/yr — ${severityLabelAir(metric)}`,
+      { sticky: true, className: "pjj-tip" }
+    );
+    poly.on("mouseover", () => poly.setStyle({ ...baseStyleAirInvisibleCountry(), stroke: true, color: "#ffd600", weight: 1.5, fillOpacity: 0.18 }).bringToFront());
+    poly.on("mouseout", () => poly.setStyle(baseStyleAirInvisibleCountry()));
+    poly.on("click", () => {
+      setCategory("air");
+      showPanel({
+        name, sub: "Country CO₂ emissions (Global Carbon Budget, ~2023)",
+        metric, total: co2Tonnes, areaKm2, population: null, real: true,
+        period: "~2023", source: "Global Carbon Budget — national fossil CO₂ totals (approx.)",
+      });
+    });
+    countriesAirLayer.addLayer(poly);
+  }
+});
+
+function baseStyleAirInvisibleCountry() {
+  return { renderer: canvasRenderer, stroke: false, fillColor: "#ffde00", fillOpacity: 0.03, smoothFactor: 2 };
+}
+
 // ---------- Water: coastal bands (sea only, no inland color) ----------
 let coastBandLayers = [];
 let lakeGradientLayer = null;
@@ -468,7 +615,7 @@ function coastStrength(lat, lng) {
 
 // cyan (clean) -> amber -> red (polluted); deliberately no green so it does not
 // melt into the satellite imagery the way the land layer would.
-const COAST_BAND_COLORS = ["#2bb8d8", "#f3cf52", "#f2a63a", "#ec7d33", "#e05236", "#c62828"];
+const COAST_BAND_COLORS = ["#0d1e6e", "#3c3a80", "#8a3d72", "#c65a3a", "#ff8c1a", "#ffb14d"];
 
 function coastRGB(strength) {
   const position = clamp(strength, 0, 1) * (COAST_BAND_COLORS.length - 1);
@@ -746,9 +893,10 @@ function heatRadiusPx(km2, mpp, mult, maxPx) {
 function buildGlow(points, gradient, areaMult, maxOpacity) {
   if (typeof L.heatLayer !== "function") return;
   const zoom = map.getZoom();
-  // Point kernels become enormous disks at street/city zoom. At detail levels,
-  // use the actual region polygons instead of painting circular heat kernels.
-  if (zoom >= DETAIL_ZOOM - 1) return;
+  // Land: at detail zooms the region polygons carry the heat, so point kernels
+  // (which would be enormous disks) are dropped. Air: the smoke is ALWAYS
+  // rendered at every zoom, with constant opacity, per spec.
+  if (zoom >= DETAIL_ZOOM - 1 && CATEGORY !== "air") return;
   const mpp = (156543.03392 * Math.cos((map.getCenter().lat * Math.PI) / 180)) / Math.pow(2, zoom);
   const isAir = CATEGORY === "air";
   const buckets = { small: [], medium: [], large: [] };
@@ -758,9 +906,9 @@ function buildGlow(points, gradient, areaMult, maxOpacity) {
     else buckets.small.push([lat, lng, i]);
   });
   const radii = {
-    small: heatRadiusPx(60, mpp, areaMult, isAir ? 160 : 120),
-    medium: heatRadiusPx(400, mpp, areaMult, isAir ? 260 : 160),
-    large: heatRadiusPx(3500, mpp, areaMult, isAir ? 380 : 200),
+    small: heatRadiusPx(60, mpp, areaMult, isAir ? 220 : 120),
+    medium: heatRadiusPx(400, mpp, areaMult, isAir ? 320 : 160),
+    large: heatRadiusPx(3500, mpp, areaMult, isAir ? 450 : 200),
   };
   Object.keys(buckets).forEach((k) => {
     if (!buckets[k].length) return;
@@ -774,14 +922,14 @@ function buildGlow(points, gradient, areaMult, maxOpacity) {
       // zoom makes the factor exactly 1 and the glow strength is ours to set.
       maxZoom: zoom,
       maxOpacity,
-      minOpacity: isAir ? 0.04 : 0.09,
+      minOpacity: isAir ? 0.06 : 0.09,
       gradient,
     });
     heatLayers.push(layer);
     map.addLayer(layer);
     if (layer._canvas) {
       layer._canvas.style.pointerEvents = "none";
-      layer._canvas.style.opacity = zoom >= DETAIL_ZOOM - 2 ? "0.4" : "1";
+      layer._canvas.style.opacity = "1"; // constant smoke presence at all zooms
     }
   });
 }
@@ -797,8 +945,13 @@ function maxOpacityForZoom(zoom) {
 function rebuildGlows() {
   heatLayers.forEach((l) => map.removeLayer(l));
   heatLayers = [];
+  if (CATEGORY === "air") {
+    // world zoom: country CO₂ smoke; city zoom: city + ward smoke
+    const points = map.getZoom() <= 4 ? airCountryPoints : airPoints.concat(airWardPoints);
+    buildGlow(points, AIR_GRADIENT, 1.6, 0.6);
+    return;
+  }
   if (CATEGORY === "land") buildGlow(heatPoints, LAND_GRADIENT, 1.15, maxOpacityForZoom(map.getZoom()));
-  if (CATEGORY === "air") buildGlow(airPoints.concat(airWardPoints), AIR_GRADIENT, 1.6, 0.35);
 }
 
 // ---------- Category switching ----------
@@ -808,7 +961,7 @@ const legendGradient = document.getElementById("legend-gradient");
 
 const LEGENDS = {
   land: { min: "Low", max: "High", css: "linear-gradient(to right, #ffd600, #ff8f00, #d50000)" },
-  water: { min: "Clean (cyan)", max: "Polluted (red)", css: "linear-gradient(to right, #2bb8d8, #f3cf52, #f2a63a, #e05236, #c62828)" },
+  water: { min: "Clean (dark blue)", max: "Polluted (orange)", css: "linear-gradient(to right, #0d1e6e, #3c3a80, #8a3d72, #ff8c1a, #ffb14d)" },
   air: { min: "Clear", max: "Smoky (high CO₂)", css: "linear-gradient(to right, rgba(255,235,0,0), #ffe100, #ff9600, #ff3d00, #c62828)" },
 };
 
@@ -824,6 +977,7 @@ function setCategory(cat) {
   document.querySelectorAll(".cat-option").forEach((b) =>
     b.classList.toggle("active", b.dataset.cat === cat)
   );
+  setBasemap(cat);
   applyCategory();
   updateLegend();
 }
@@ -831,6 +985,7 @@ function setCategory(cat) {
 function applyCategory() {
   // remove everything category-specific
   [cityLayer, lakesLayer, airCityLayer, gtaWasteLayer, gtaDetailLayer, markhamAirLayer,
+    countriesLandLayer, countriesAirLayer,
     landWardLayers.Toronto, airWardLayers.Toronto].forEach((l) => map.removeLayer(l));
   coastBandLayers.forEach((l) => map.removeLayer(l));
   heatLayers.forEach((l) => map.removeLayer(l));
@@ -838,14 +993,19 @@ function applyCategory() {
   rebuildGlows();
 
   const zoomed = map.getZoom() >= DETAIL_ZOOM;
+  const worldView = map.getZoom() <= 4;
   if (CATEGORY === "land") {
-    // Keep surrounding city coverage; detail layers are overlays, not a
-    // replacement for all city data inside a broad GTA bounding box.
-    map.addLayer(cityLayer);
-    if (map.getZoom() >= DETAIL_ZOOM - 1) map.addLayer(gtaWasteLayer);
-    if (zoomed) {
-      map.addLayer(gtaDetailLayer);
-      map.addLayer(landWardLayers.Toronto);
+    if (worldView) {
+      map.addLayer(countriesLandLayer);
+    } else {
+      // Keep surrounding city coverage; detail layers are overlays, not a
+      // replacement for all city data inside a broad GTA bounding box.
+      map.addLayer(cityLayer);
+      if (map.getZoom() >= DETAIL_ZOOM - 1) map.addLayer(gtaWasteLayer);
+      if (zoomed) {
+        map.addLayer(gtaDetailLayer);
+        map.addLayer(landWardLayers.Toronto);
+      }
     }
   } else if (CATEGORY === "water") {
     buildLakeGradient();
@@ -853,10 +1013,14 @@ function applyCategory() {
     coastBandLayers.forEach((l) => map.addLayer(l));
     map.addLayer(lakesLayer); // lakes on top of the sea-side coastal bands
   } else if (CATEGORY === "air") {
-    map.addLayer(airCityLayer);
-    if (map.getZoom() >= DETAIL_ZOOM - 1) map.addLayer(markhamAirLayer);
-    if (zoomed) {
-      map.addLayer(airWardLayers.Toronto);
+    if (worldView) {
+      map.addLayer(countriesAirLayer);
+    } else {
+      map.addLayer(airCityLayer);
+      if (map.getZoom() >= DETAIL_ZOOM - 1) map.addLayer(markhamAirLayer);
+      if (zoomed) {
+        map.addLayer(airWardLayers.Toronto);
+      }
     }
   }
 }
@@ -866,6 +1030,30 @@ map.on("zoomend", () => { if (CATEGORY !== "water") applyCategory(); });
 // wire up the permanent category panel (bottom-right)
 document.querySelectorAll(".cat-option").forEach((b) => {
   b.addEventListener("click", () => setCategory(b.dataset.cat));
+});
+
+// ---------- Loading screen ----------
+const loadingOverlay = document.getElementById("loading-overlay");
+document.getElementById("loading-continue").addEventListener("click", () => {
+  loadingOverlay.classList.add("hidden");
+  setTimeout(() => loadingOverlay.remove(), 600);
+});
+
+// ---------- Potential funding panel ----------
+const fundingPanel = document.getElementById("funding-panel");
+document.getElementById("open-funding").addEventListener("click", () => {
+  const body = document.getElementById("funding-body");
+  const data = window.PJJ_FUNDING || {};
+  body.innerHTML =
+    `<p class="funding-note">Environmental organizations across all provinces and territories — potential cleanup partners and sponsors.</p>` +
+    Object.entries(data).map(([prov, orgs]) =>
+      `<h3>${prov}</h3>` + orgs.map(([name, url]) =>
+        `<a href="${url}" target="_blank" rel="noopener noreferrer">${name}</a>`).join("")
+    ).join("");
+  fundingPanel.hidden = false;
+});
+document.getElementById("funding-close").addEventListener("click", () => {
+  fundingPanel.hidden = true;
 });
 
 map.whenReady(() => {

@@ -1,4 +1,4 @@
-# Planet_Sweeper (PJJ-2 v1)
+# PROJECT V3 FINAL - PLANET-SWEEPER
 
 PlanetSweeper is an interactive environmental map made using ArcGIS, providing visuals for littering and pollution frequencies around the world.
 Our model allows users to report local littering hotspots and request volunteer help.

@@ -624,3 +624,111 @@ body {
 @media (max-width: 700px) {
   #right-rail { width: min(360px, calc(100vw - 70px)); }
 }
+
+/* ---------- Loading overlay ---------- */
+#loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  background: radial-gradient(ellipse at center, #0d1e3a 0%, #05070f 70%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.5s ease;
+}
+
+#loading-overlay.hidden { opacity: 0; pointer-events: none; }
+
+.loading-card { text-align: center; color: #fff; padding: 40px; }
+
+.loading-card h1 {
+  font-size: 42px;
+  margin: 0 0 10px;
+  letter-spacing: 0.04em;
+  background: linear-gradient(90deg, #00c853, #ffd600, #ff6d00);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.loading-card p { color: #b9cbd6; font-size: 16px; margin: 0 0 26px; }
+
+#loading-continue {
+  background: linear-gradient(90deg, #00c853, #2e7d32);
+  color: #fff;
+  border: none;
+  border-radius: 24px;
+  padding: 12px 44px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 18px rgba(0, 200, 83, 0.35);
+}
+
+#loading-continue:hover { filter: brightness(1.15); }
+
+/* ---------- Navy-scale basemap (water category) ---------- */
+#map.navy .leaflet-tile-pane {
+  filter: brightness(0.42) contrast(1.15) sepia(1) hue-rotate(180deg) saturate(2.6);
+}
+
+/* ---------- Funding panel ---------- */
+#funding-panel {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 1400;
+  width: 330px;
+  max-height: 78vh;
+  overflow-y: auto;
+  background: rgba(15, 18, 22, 0.94);
+  color: #eee;
+  border-radius: 12px;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+}
+
+#funding-panel .panel-head {
+  position: sticky;
+  top: 0;
+  background: rgba(15, 18, 22, 0.97);
+}
+
+#funding-close {
+  background: none;
+  border: none;
+  color: #9ab;
+  font-size: 18px;
+  cursor: pointer;
+  margin-left: auto;
+}
+
+#funding-close:hover { color: #fff; }
+
+#funding-body { padding: 10px 16px 16px; }
+
+#funding-body h3 {
+  font-size: 13px;
+  color: #ffd600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 14px 0 6px;
+}
+
+#funding-body h3:first-child { margin-top: 4px; }
+
+#funding-body a {
+  display: block;
+  color: #b9cbd6;
+  text-decoration: none;
+  font-size: 13px;
+  padding: 3px 0;
+}
+
+#funding-body a:hover { color: #fff; text-decoration: underline; }
+
+#funding-body .funding-note {
+  font-size: 11px;
+  color: #789;
+  margin: 4px 0 0;
+}

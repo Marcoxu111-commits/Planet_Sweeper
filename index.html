@@ -3,15 +3,23 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PJJ-2 — Americas Litter &amp; Pollution Map</title>
+  <title>Planet Sweeper final version</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <div id="loading-overlay" role="dialog" aria-label="Welcome">
+    <div class="loading-card">
+      <h1>Planet Sweeper</h1>
+      <p>Welcome to the Planet Sweeper interactive map</p>
+      <button id="loading-continue" type="button">Continue</button>
+    </div>
+  </div>
+
   <div id="map"></div>
 
   <div id="main-panel" class="hud collapse-panel">
-    <div class="hud-heading"><h1>PJJ-2 <span>v1 — Americas</span></h1><button class="panel-toggle" type="button" data-panel="main-panel" data-panel-name="City and initiatives" aria-controls="hud-body" aria-expanded="true" aria-label="Collapse city and initiatives">−</button></div>
+    <div class="hud-heading"><h1>Planet Sweeper <span>final version</span></h1><button class="panel-toggle" type="button" data-panel="main-panel" data-panel-name="City and initiatives" aria-controls="hud-body" aria-expanded="true" aria-label="Collapse city and initiatives">−</button></div>
     <div id="hud-body">
     <p class="hud-intro">North, Central &amp; South America and the Caribbean. Explore your city and make a local difference.</p>
     <div class="legend">
@@ -36,6 +44,7 @@
     <div class="initiative-actions hud-actions">
       <button id="report-hotspot" type="button"><span class="action-icon" aria-hidden="true">＋</span><span><strong>Report a hotspot</strong><small>Choose a spot. Rally some help.</small></span><span aria-hidden="true">↗</span></button>
       <button id="find-initiatives" type="button"><span class="action-icon" aria-hidden="true">♡</span><span><strong>Volunteer nearby</strong><small>Find your next local cleanup.</small></span><span aria-hidden="true">↗</span></button>
+      <button id="open-funding" type="button"><span class="action-icon" aria-hidden="true">$</span><span><strong>Potential funding</strong><small>Environmental orgs across Canada.</small></span><span aria-hidden="true">↗</span></button>
     </div>
     </div>
   </div>
@@ -138,7 +147,7 @@
         <span class="cat-swatch water"></span>
         <span class="cat-text">
           <span class="cat-name">Water pollution</span>
-          <span class="cat-desc">Coastal regions and lakes across the Americas. Cyan = clean to red = polluted. Indices are illustrative.</span>
+          <span class="cat-desc">Coastal regions and lakes across the Americas. Dark blue = clean to orange = polluted. Indices are illustrative.</span>
         </span>
       </button>
       <button class="cat-option" data-cat="air">
@@ -153,6 +162,11 @@
 
   </div>
 
+  <aside id="funding-panel" role="dialog" aria-labelledby="funding-heading" tabindex="-1" hidden>
+    <header class="panel-head"><span id="funding-heading">Potential funding — Canada</span><button id="funding-close" aria-label="Close funding panel">×</button></header>
+    <div id="funding-body"></div>
+  </aside>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
   <script src="data/us_cities.js"></script>
@@ -164,8 +178,12 @@
   <script src="data/gta_detail.js"></script>
   <script src="data/lakes.js"></script>
   <script src="data/coastal_areas.js"></script>
+  <script src="data/countries.js"></script>
+  <script src="data/world_waste.js"></script>
+  <script src="data/world_air.js"></script>
   <script src="data/real_litter.js"></script>
   <script src="city-photos.js"></script>
+  <script src="funding.js"></script>
   <script src="panels.js"></script>
   <script src="water-utils.js"></script>
   <script src="app.js"></script>
