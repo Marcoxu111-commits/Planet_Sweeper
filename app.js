@@ -208,6 +208,10 @@ function colorLandT(t) {
   return `hsl(${(52 * (1 - te)).toFixed(0)}, 95%, ${(52 - 8 * t).toFixed(0)}%)`;
 }
 
+function colorAirT(t) {
+  return `hsl(${Math.round(60 - 60 * t)}, 95%, ${Math.round(62 - 22 * t)}%)`;
+}
+
 function severityLabelWaste(t) {
   if (t < 0.25) return "Low";
   if (t < 0.5) return "Moderate";
@@ -583,16 +587,16 @@ function countryCO2(name, areaKm2) {
   // average model where not. Visible at every zoom level.
   if (areaKm2) {
     const co2 = countryCO2(name, areaKm2);
-    airCountryPoints.push([centroid[0], centroid[1], logT(co2.metric, AIR_C_LOGMIN, AIR_C_LOGMAX), areaKm2]);
-    const poly = L.geoJSON(f, { style: baseStyleAirInvisibleCountry }).getLayers()[0];
+    const co2T = logT(co2.metric, AIR_C_LOGMIN, AIR_C_LOGMAX);
+    const poly = L.geoJSON(f, { style: () => countryAirStyle(co2T) }).getLayers()[0];
     poly.bindTooltip(
       `<strong>${name}</strong><br>` +
         (co2.real ? `CO₂: <strong>${fmtInt(co2.metric * areaKm2)} t/yr</strong> (Global Carbon Budget)<br>` : "") +
         `${fmtInt(co2.metric)} t/km²/yr — ${severityLabelAir(co2.metric)}${co2.real ? "" : "<br><em>modeled (regional average)</em>"}`,
       { sticky: true, className: "pjj-tip" }
     );
-    poly.on("mouseover", () => poly.setStyle({ ...baseStyleAirInvisibleCountry(), stroke: true, color: "#ffd600", weight: 1.5, fillOpacity: 0.18 }).bringToFront());
-    poly.on("mouseout", () => poly.setStyle(baseStyleAirInvisibleCountry()));
+    poly.on("mouseover", () => poly.setStyle({ ...countryAirStyle(co2T), stroke: true, color: "#fff", weight: 1.5, fillOpacity: Math.min(0.9, 0.18 + 0.5 * co2T + 0.15) }).bringToFront());
+    poly.on("mouseout", () => poly.setStyle(countryAirStyle(co2T)));
     poly.on("click", () => {
       setCategory("air");
       showPanel({
@@ -631,8 +635,18 @@ function countryCO2(name, areaKm2) {
   }
 });
 
-function baseStyleAirInvisibleCountry() {
-  return { renderer: canvasRenderer, stroke: false, fillColor: "#ffde00", fillOpacity: 0.03, smoothFactor: 2 };
+// Country haze is a POLYGON fill, not a heat kernel: identical visibility at
+// every zoom level, no circles. Intensity drives fill colour + opacity.
+function countryAirStyle(t) {
+  return {
+    renderer: canvasRenderer,
+    stroke: true,
+    color: "rgba(255, 255, 255, 0.25)",
+    weight: 0.6,
+    fillColor: colorAirT(t),
+    fillOpacity: 0.18 + 0.5 * t,
+    smoothFactor: 2,
+  };
 }
 
 // ---------- Water: coastal bands (sea only, no inland color) ----------
@@ -963,10 +977,9 @@ function buildGlow(points, gradient, areaMult, maxOpacity) {
   if (zoom >= DETAIL_ZOOM - 1 && CATEGORY !== "air") return;
   const mpp = (156543.03392 * Math.cos((map.getCenter().lat * Math.PI) / 180)) / Math.pow(2, zoom);
   const isAir = CATEGORY === "air";
-  // Log-area bucketing: region sizes span orders of magnitude (a city ward to
-  // Russia), so each decade of area gets its own kernel sized from that
-  // decade's representative area. Fixed small/medium/large buckets collapsed
-  // every country to the minimum radius at world zoom, hiding the haze.
+  // Log-area bucketing, but for AIR the kernel radius is FIXED IN PIXELS
+  // (scaled from region area once, never recomputed from zoom). The haze looks
+  // identical zoomed out and zoomed in — constant size, constant opacity.
   const buckets = {};
   points.forEach(([lat, lng, i, km2]) => {
     const key = clamp(Math.floor(Math.log10(Math.max(km2, 10))), 2, 8);
@@ -974,7 +987,9 @@ function buildGlow(points, gradient, areaMult, maxOpacity) {
   });
   const radii = {};
   Object.keys(buckets).forEach((k) => {
-    radii[k] = heatRadiusPx(Math.pow(10, Number(k) + 0.5), mpp, areaMult, isAir ? 450 : 200);
+    radii[k] = isAir
+      ? clamp(Math.sqrt(Math.pow(10, Number(k) + 0.5)) * 1.1, 12, 110)
+      : heatRadiusPx(Math.pow(10, Number(k) + 0.5), mpp, areaMult, 200);
   });
   Object.keys(buckets).forEach((k) => {
     if (!buckets[k].length) return;
@@ -1012,9 +1027,9 @@ function rebuildGlows() {
   heatLayers.forEach((l) => map.removeLayer(l));
   heatLayers = [];
   if (CATEGORY === "air") {
-    // world zoom: country CO₂ smoke; city zoom: city + ward smoke
-    const points = airCountryPoints.concat(map.getZoom() <= 4 ? [] : airPoints.concat(airWardPoints));
-    buildGlow(points, AIR_GRADIENT, 1.6, 0.6);
+    // Country haze is carried by the polygon fills (countriesAirLayer) at EVERY
+    // zoom. Smoke kernels only add glow over the city/ward layers.
+    if (map.getZoom() > 4) buildGlow(airPoints.concat(airWardPoints), AIR_GRADIENT, 1.0, 0.5);
     return;
   }
   if (CATEGORY === "land") buildGlow(heatPoints, LAND_GRADIENT, 1.15, maxOpacityForZoom(map.getZoom()));
@@ -1080,9 +1095,9 @@ function applyCategory() {
     coastBandLayers.forEach((l) => map.addLayer(l));
     map.addLayer(lakesLayer); // lakes on top of the sea-side coastal bands
   } else if (CATEGORY === "air") {
-    if (worldView) {
-      map.addLayer(countriesAirLayer);
-    } else {
+    // Country haze polygons are ALWAYS visible (any zoom level).
+    map.addLayer(countriesAirLayer);
+    if (!worldView) {
       map.addLayer(airCityLayer);
       if (map.getZoom() >= DETAIL_ZOOM - 1) map.addLayer(markhamAirLayer);
       if (zoomed) {
