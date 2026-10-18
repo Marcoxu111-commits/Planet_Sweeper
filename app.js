@@ -503,38 +503,22 @@ const REGION_STATS = {};
   Object.values(REGION_STATS).forEach((s) => { s.avgDensity = s.sumDensity / s.count; });
 })();
 
-const REGION_CO2_DENSITY = {};
-(function () {
-  const areaByName = {};
-  (window.PJJ_COUNTRIES?.features || []).forEach((f) => {
-    areaByName[f.properties.COUNTRY] = f.properties.area_km2;
-  });
-  const acc = {};
-  Object.entries(WORLD_AIR).forEach(([name, mt]) => {
-    const w = WORLD_WASTE[name];
-    const area = areaByName[name];
-    if (!w || !area) return;
-    const dens = (mt * 1e6) / area;
-    const s = (acc[w.region] = acc[w.region] || { sum: 0, count: 0 });
-    s.sum += dens; s.count += 1;
-  });
-  let gSum = 0, gCount = 0;
-  Object.values(acc).forEach((s) => { gSum += s.sum / s.count; gCount += 1; });
-  const globalAvg = gCount ? gSum / gCount : 40;
-  Object.entries(WORLD_WASTE).forEach(([name, d]) => {
-    if (!(d.region in acc)) return;
-    REGION_CO2_DENSITY[d.region] = acc[d.region].sum / acc[d.region].count;
-  });
-  REGION_CO2_DENSITY.__global = globalAvg;
-})();
+// Countries without a reported CO₂ total: estimate population from their own
+// solid-waste generation (World Bank average ≈ 0.23 t MSW per person per year),
+// then apply a conservative 2.0 t per-capita CO₂ (World Bank low/middle-income
+// average). This keeps low-emission countries low instead of painting them
+// with a dense regional average. Countries with no data at all: negligible.
 function countryCO2(name, areaKm2) {
   const mt = WORLD_AIR[name];
   if (mt != null && areaKm2) {
     return { metric: (mt * 1e6) / areaKm2, real: true, source: "Global Carbon Budget — national fossil CO₂ totals (approx.)" };
   }
   const w = WORLD_WASTE[name];
-  const dens = (w && REGION_CO2_DENSITY[w.region] != null) ? REGION_CO2_DENSITY[w.region] : REGION_CO2_DENSITY.__global;
-  return { metric: dens, real: false, source: "Modeled from regional average CO₂ density (no reported national total)" };
+  if (w && areaKm2) {
+    const popEst = w.waste_tonnes / 0.23;
+    return { metric: (popEst * 2.0) / areaKm2, real: false, source: "Modeled: waste-based population estimate × 2.0 t per-capita CO₂ (World Bank averages)" };
+  }
+  return { metric: 3, real: false, source: "No publicized emissions or waste data — negligible modeled CO₂ density" };
 }
 
 (window.PJJ_COUNTRIES?.features || []).forEach((f) => {
@@ -592,7 +576,7 @@ function countryCO2(name, areaKm2) {
     poly.bindTooltip(
       `<strong>${name}</strong><br>` +
         (co2.real ? `CO₂: <strong>${fmtInt(co2.metric * areaKm2)} t/yr</strong> (Global Carbon Budget)<br>` : "") +
-        `${fmtInt(co2.metric)} t/km²/yr — ${severityLabelAir(co2.metric)}${co2.real ? "" : "<br><em>modeled (regional average)</em>"}`,
+        `${fmtInt(co2.metric)} t/km²/yr — ${severityLabelAir(co2.metric)}${co2.real ? "" : "<br><em>modeled estimate</em>"}`,
       { sticky: true, className: "pjj-tip" }
     );
     poly.on("mouseover", () => poly.setStyle({ ...countryAirStyle(co2T), stroke: true, color: "#fff", weight: 1.5, fillOpacity: Math.min(0.9, 0.18 + 0.5 * co2T + 0.15) }).bringToFront());
@@ -600,7 +584,7 @@ function countryCO2(name, areaKm2) {
     poly.on("click", () => {
       setCategory("air");
       showPanel({
-        name, sub: co2.real ? "Country CO₂ emissions (Global Carbon Budget, ~2023)" : "Country CO₂ — modeled from regional average",
+        name, sub: co2.real ? "Country CO₂ emissions (Global Carbon Budget, ~2023)" : "Country CO₂ — modeled estimate",
         metric: co2.metric, total: co2.metric * areaKm2, areaKm2, population: null,
         real: co2.real, period: "~2023", source: co2.source,
       });
