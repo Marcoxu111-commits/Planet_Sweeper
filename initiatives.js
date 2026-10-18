@@ -3,6 +3,7 @@
 (() => {
   const $ = (id) => document.getElementById(id);
   const drawer = $("initiative-panel");
+  const broomie = BroomieCursor.create(map.getContainer());
   const reportMarkers = L.layerGroup().addTo(map);
   const profileKey = "planet-sweeper.profile.v1";
   let profile, store;
@@ -63,6 +64,7 @@
   }
   function stopPicking() {
     state.picking = null;
+    broomie.setActive(false);
     map.getContainer().classList.remove("report-picking");
   }
   function clearDraft() {
@@ -109,21 +111,25 @@
     state.picking = mode;
     section("initiative-location");
     $("location-heading").textContent = mode === "nearby" ? "Where would you like to volunteer?" : "Where is the hotspot?";
-    $("location-instructions").textContent = "Choose how you'd like to find the spot. No GPS or device location needed.";
+    $("location-instructions").textContent = mode === "report"
+      ? "Broomie is ready. Click a spot on the map, or switch to address search. Escape cancels."
+      : "Choose how you'd like to find the spot. No GPS or device location needed.";
     $("address-results").replaceChildren();
-    locationMethod("address");
-    status("");
+    $("broomie-map-preview").hidden = mode !== "report";
+    $("map-location-icon").hidden = mode === "report";
+    locationMethod(mode === "report" ? "map" : "address");
   }
   function locationMethod(method) {
     const useMap = method === "map";
     if (useMap) state.addressRequest?.abort();
     map.getContainer().classList.toggle("report-picking", useMap && !!state.picking);
+    broomie.setActive(useMap && state.picking === "report");
     $("location-method-address").setAttribute("aria-pressed", String(!useMap));
     $("location-method-map").setAttribute("aria-pressed", String(useMap));
     $("address-search").hidden = useMap;
     $("address-results").hidden = useMap;
     $("map-location-help").hidden = !useMap;
-    status(useMap ? "Click a spot on the map. You can drag the pin to adjust it afterwards." : "");
+    status(useMap ? "Click a spot on the map. The little reticle marks the exact location; drag the pin afterwards to adjust it." : "");
   }
   function beginReport() {
     open("Report a hotspot");

@@ -53,7 +53,7 @@ test("southern lakes and coastline regions extend below the equator without remo
   assert.ok(regions.some((f) => f.properties.seed[1] > 70));
 });
 
-test("zoom controls use the bottom left and hotspot icons have a simple dot", () => {
+test("zoom controls use the bottom left and hotspot icons have a simple symbol", () => {
   assert.match(fs.readFileSync(path.join(root, "app.js"), "utf8"), /zoomControl\.setPosition\("bottomleft"\)/);
   const initiatives = fs.readFileSync(path.join(root, "initiatives.js"), "utf8");
   assert.match(initiatives, /initiative-pin-symbol/);

@@ -1,4 +1,4 @@
-// Potential funding partners — Canadian environmental organizations by province/territory.
+// Potential funding partners — Canadian environmental NGOs and community partners.
 window.PJJ_FUNDING = {
   "British Columbia": [
     ["SPEC – Society Promoting Environmental Conservation", "https://spec.bc.ca/"],

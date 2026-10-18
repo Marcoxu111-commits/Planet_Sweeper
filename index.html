@@ -21,12 +21,13 @@
   <div id="main-panel" class="hud collapse-panel">
     <div class="hud-heading"><h1>Planet Sweeper <span>final version</span></h1><button class="panel-toggle" type="button" data-panel="main-panel" data-panel-name="City and initiatives" aria-controls="hud-body" aria-expanded="true" aria-label="Collapse city and initiatives">−</button></div>
     <div id="hud-body">
-    <p class="hud-intro">North, Central &amp; South America and the Caribbean. Explore your city and make a local difference.</p>
+    <p class="hud-intro">Explore global waste evidence, major cities, and coastal waters. Make a local difference.</p>
     <div class="legend">
       <span id="legend-min">Low</span>
       <div class="gradient" id="legend-gradient"></div>
       <span id="legend-max">High</span>
     </div>
+    <p id="legend-note" class="legend-note"></p>
     <form id="city-search" role="search" autocomplete="off">
       <label for="city-query">Find your city</label>
       <input id="city-query" type="search" placeholder="Toronto, Mexico City, São Paulo…"
@@ -44,7 +45,7 @@
     <div class="initiative-actions hud-actions">
       <button id="report-hotspot" type="button"><span class="action-icon" aria-hidden="true">＋</span><span><strong>Report a hotspot</strong><small>Choose a spot. Rally some help.</small></span><span aria-hidden="true">↗</span></button>
       <button id="find-initiatives" type="button"><span class="action-icon" aria-hidden="true">♡</span><span><strong>Volunteer nearby</strong><small>Find your next local cleanup.</small></span><span aria-hidden="true">↗</span></button>
-      <button id="open-funding" type="button"><span class="action-icon" aria-hidden="true">$</span><span><strong>Potential funding</strong><small>Environmental orgs across Canada.</small></span><span aria-hidden="true">↗</span></button>
+      <button id="open-funding" type="button"><span class="action-icon" aria-hidden="true">$</span><span><strong>Potential funding</strong><small>Environmental NGOs across Canada.</small></span><span aria-hidden="true">↗</span></button>
     </div>
     </div>
   </div>
@@ -68,7 +69,7 @@
       <h3 id="location-heading">Where is the hotspot?</h3>
       <p id="location-instructions">Search an address or choose a spot directly on the map.</p>
       <div class="location-methods" role="group" aria-label="Choose a location method"><button id="location-method-address" type="button" aria-pressed="true">Search an address</button><button id="location-method-map" type="button" aria-pressed="false">Pick on the map</button></div>
-      <div id="map-location-help" class="map-location-help" hidden><span aria-hidden="true">⌖</span><p>Move the map, then click the exact spot you have in mind.</p><button id="use-map-center" type="button">Use map centre instead</button></div>
+      <div id="map-location-help" class="map-location-help" hidden><span id="map-location-icon" aria-hidden="true">⌖</span><img id="broomie-map-preview" src="assets/broomie/broomie.png" alt="Broomie holding a broom and a rubbish bag" width="96" height="80" hidden /><p>Move the map, then click the exact spot you have in mind. On a touchscreen, tap a spot.</p><button id="use-map-center" type="button">Use map centre instead</button></div>
       <form id="address-search" class="location-search-card">
         <label for="hotspot-address">Specific address</label>
         <div class="initiative-input-row"><input id="hotspot-address" type="search" maxlength="250" placeholder="Street address, city, country" required /><button type="submit">Find</button></div>
@@ -140,14 +141,14 @@
         <span class="cat-swatch land"></span>
         <span class="cat-text">
           <span class="cat-name">Waste pollution</span>
-          <span class="cat-desc">Litter reports per km²: real 311 data where available, modeled elsewhere. Yellow = low, red = high.</span>
+          <span class="cat-desc">Countries: documented unmanaged MSW share. Cities: report activity or modeled intensity. Yellow = lower, red = higher.</span>
         </span>
       </button>
       <button class="cat-option" data-cat="water">
         <span class="cat-swatch water"></span>
         <span class="cat-text">
           <span class="cat-name">Water pollution</span>
-          <span class="cat-desc">Coastal regions and lakes across the Americas. Dark blue = clean to orange = polluted. Indices are illustrative.</span>
+          <span class="cat-desc">Global coastal regions and lakes. Dark blue → orange illustrative indices; neutral Arctic water means insufficient data.</span>
         </span>
       </button>
       <button class="cat-option" data-cat="air">
@@ -172,24 +173,30 @@
   <script src="data/us_cities.js"></script>
   <script src="data/ca_cities.js"></script>
   <script src="data/americas.js"></script>
+  <script src="data/global_cities.js"></script>
   <script src="data/toronto_wards.js"></script>
   <script src="data/toronto_districts.js"></script>
   <script src="data/gta_regions.js"></script>
   <script src="data/gta_detail.js"></script>
   <script src="data/lakes.js"></script>
-  <script src="data/coastal_areas.js"></script>
+  <script src="data/global_coastal_areas.js"></script>
   <script src="data/countries.js"></script>
   <script src="data/world_lakes.js"></script>
   <script src="data/world_waste.js"></script>
+  <script src="data/waste_evidence.js"></script>
   <script src="data/world_air.js"></script>
   <script src="data/real_litter.js"></script>
   <script src="city-photos.js"></script>
   <script src="funding.js"></script>
   <script src="panels.js"></script>
   <script src="water-utils.js"></script>
+  <script src="waste-utils.js"></script>
   <script src="app.js"></script>
   <script src="search.js"></script>
   <script src="initiatives-store.js"></script>
+  <script src="broomie-physics.js"></script>
+  <script src="broomie-placement.js"></script>
+  <script src="broomie-cursor.js"></script>
   <script src="initiatives.js"></script>
 </body>
 </html>

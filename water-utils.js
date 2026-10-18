@@ -25,8 +25,18 @@
   }
   function regionName(seed, index) {
     const [lng, lat] = seed;
-    let coast = "Americas coast";
-    if (lat < 9 && lng < -68) coast = "South American Pacific coast";
+    let coast = "Coastal waters";
+    if (lat > 66.5) coast = "Arctic coast";
+    else if (lng >= -10 && lng <= 40 && lat >= 30 && lat <= 48) coast = "Mediterranean coast";
+    else if (lng >= 30 && lng <= 43 && lat >= 12 && lat < 30) coast = "Red Sea coast";
+    else if (lng > 43 && lng < 60 && lat >= 23 && lat < 32) coast = "Persian Gulf / Gulf of Oman";
+    else if (lng >= 25 && lng < 105 && lat < 30) coast = "Indian Ocean coast";
+    else if (lng >= 105 && lat < 0) coast = "Oceania coast";
+    else if (lng >= 100) coast = "Asia-Pacific coast";
+    else if (lng >= -10 && lat > 48) coast = "European Atlantic / North Sea coast";
+    else if (lng >= -30 && lng < 25 && lat < 30) coast = "African Atlantic coast";
+    else if (lat < -5 && lng < -130) coast = "South Pacific islands";
+    else if (lat < 9 && lng < -68) coast = "South American Pacific coast";
     else if (lat < 9) coast = "South American Atlantic coast";
     else if (lat > 64) coast = "Arctic coast";
     else if (lat > 50 && lng > -96 && lng < -75) coast = "Hudson Bay coast";

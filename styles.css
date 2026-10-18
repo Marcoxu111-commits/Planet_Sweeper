@@ -95,6 +95,10 @@ body {
   pointer-events: none !important;
 }
 
+/* Hide Leaflet's scaled previous heat canvas during zoom transitions. The new
+   fixed-size frame is rebuilt on zoomend, without a flash of giant circles. */
+.leaflet-zoom-anim .air-smoke-layer { visibility: hidden; }
+
 /* ---------- Category options panel (permanent, bottom-right) ---------- */
 #category-panel {
   position: absolute;
@@ -469,6 +473,35 @@ body {
 }
 .initiative-pin-symbol { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: #ffffff24; color: #fff; font-size: 24px; line-height: 1; text-shadow: 0 1px 2px #045e5b80; }
 .initiative-pin-draft { border-style: dashed; }
+
+/* Original Broomie art is a transparent cut-out rig, not a replacement drawing.
+   The reticle stays at the exact click coordinate while the art floats beside it. */
+#broomie-cursor {
+  position: fixed; left: 0; top: 0; width: 0; height: 0; z-index: 2000;
+  pointer-events: none; user-select: none; will-change: transform;
+}
+#broomie-cursor * { pointer-events: none; }
+#broomie-cursor::before {
+  content: ""; position: absolute; left: -4px; top: -4px; width: 8px; height: 8px;
+  border: 2px solid #fff; box-sizing: border-box; border-radius: 50%;
+  background: #159782; box-shadow: 0 0 0 1px #142d3c;
+}
+.broomie-rig {
+  position: absolute; left: var(--broomie-left, -120px); top: var(--broomie-top, -47px);
+  width: 112px; height: 93.8px; transform-origin: 43.8% 49.1%;
+  filter: drop-shadow(0 3px 3px #0005);
+}
+.broomie-part { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.broomie-leftArm { transform-origin: 20% 54.6%; }
+.broomie-rightArm { transform-origin: 69.6% 48.5%; }
+.broomie-leftLeg { transform-origin: 40.7% 73.9%; }
+.broomie-rightLeg { transform-origin: 47.3% 73.9%; }
+#map.broomie-picking, #map.broomie-picking.leaflet-grab, #map.broomie-picking .leaflet-interactive { cursor: none; }
+#map.broomie-picking .leaflet-control, #map.broomie-picking .leaflet-control * { cursor: auto; }
+#broomie-map-preview { display: block; width: 96px; height: auto; margin: 0 auto 8px; }
+@media (prefers-reduced-motion: reduce) {
+  .broomie-rig, .broomie-part { transition: none; }
+}
 @media (pointer: fine) {
   .report-picking, .report-picking .leaflet-interactive, .report-picking.leaflet-grab { cursor: crosshair; }
   .report-picking .leaflet-control { cursor: auto; }
@@ -667,10 +700,12 @@ body {
 
 #loading-continue:hover { filter: brightness(1.15); }
 
-/* ---------- Navy-scale basemap (water category) ---------- */
+/* Original dark navy water-map look. */
 #map.navy .leaflet-tile-pane {
   filter: brightness(0.55) contrast(1.5);
 }
+
+.hud .legend-note { color: #b6c4cf; font-size: 10px; line-height: 1.45; margin: 8px 0; }
 
 /* ---------- Funding panel ---------- */
 #funding-panel {

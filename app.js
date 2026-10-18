@@ -16,12 +16,12 @@
 //    (US 14.9 t, Canada 14.2 t — EPA / Environment Canada averages).
 
 const DETAIL_ZOOM = 9;
-const LOGMIN = 0.5;  // land: ~3 reports/km²/yr
-const LOGMAX = 2.0;  // land: 100 reports/km²/yr
+const LOGMIN = 1.0;  // local reporting intensity: 10 reports/km²/yr
+const LOGMAX = 2.6;  // local reporting intensity: ~400 reports/km²/yr
 const AIR_LOGMIN = 3.3; // air: ~2,000 t CO₂/km²/yr
 const AIR_LOGMAX = 4.7; // air: ~50,000 t CO₂/km²/yr
 const CO2_PER_CAPITA = { US: 14.9, CA: 14.2 };
-const AMERICAS_COUNTRIES = new Map((window.PJJ_AMERICAS_COUNTRIES || []).map((country) => [country.code, country]));
+const AMERICAS_COUNTRIES = new Map([...(window.PJJ_AMERICAS_COUNTRIES || []), ...(window.PJJ_GLOBAL_COUNTRIES || [])].map((country) => [country.code, country]));
 AMERICAS_COUNTRIES.forEach((country) => { CO2_PER_CAPITA[country.code] = country.co2PerCapita ?? 3.5; });
 
 function airFactorSource(country) {
@@ -37,11 +37,11 @@ let CATEGORY = "land";
 const map = L.map("map", { zoomControl: true, preferCanvas: true }).setView([12, -85], 3);
 map.zoomControl.setPosition("bottomleft");
 
-// Category basemaps: land = satellite imagery; water = navy-scale (oceans dark
-// blue, land near-black via CSS filter); air = NASA Black Marble night lights.
+// Category basemaps: satellite land, the original dark navy water context, and
+// NASA night lights for air.
 const BASEMAPS = {
   land: L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
-    attribution: "Imagery &copy; Esri &mdash; Boundaries: US DOT BTS, StatCan, Ontario, Toronto, Natural Earth (public domain), Esri World Countries &mdash; CO₂ factors: World Bank 2022 &mdash; Litter: NYC/Chicago/LA/Toronto 311; waste stats: national statistics offices",
+    attribution: "Imagery &copy; Esri &mdash; Boundaries: US DOT BTS, StatCan, Ontario, Toronto, Natural Earth (public domain), Esri World Countries &mdash; CO₂ factors: World Bank 2022 &mdash; Litter: NYC/Chicago/LA/Toronto 311; MSW: World Bank What a Waste 3.0 (2026), CC BY 4.0",
     maxZoom: 18,
   }),
   water: L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", {
@@ -104,10 +104,7 @@ function severityLabel(metric) {
     if (t < 0.75) return "High";
     return "Severe";
   }
-  if (metric < 2) return "Low";
-  if (metric < 8) return "Moderate";
-  if (metric < 25) return "High";
-  return "Very High";
+  return severityLabelLand(metric);
 }
 
 function hash(s) {
@@ -120,7 +117,9 @@ function modeledLandMetric(name, pop, areaKm2) {
   const dens = areaKm2 > 0 ? pop / areaKm2 : 0;
   if (dens <= 0) return Math.pow(10, LOGMIN);
   const v = clamp(-4.5 + 3.8 * Math.log10(dens) + (hash(name) - 0.5) * 1.6, 2, 9.5);
-  return Math.pow(10, LOGMIN + ((v - 2) / 7.5) * (LOGMAX - LOGMIN));
+  // Preserve the old modeled numeric range while widening the display scale.
+  // This density proxy is not a measured litter count or pollution diagnosis.
+  return Math.pow(10, 0.5 + ((v - 2) / 7.5) * 1.5);
 }
 
 // Modeled air: CO₂ tonnes/km²/yr = population × per-capita ÷ effective area.
@@ -208,15 +207,16 @@ function colorLandT(t) {
   return `hsl(${(52 * (1 - te)).toFixed(0)}, 95%, ${(52 - 8 * t).toFixed(0)}%)`;
 }
 
-function colorAirT(t) {
-  return `hsl(${Math.round(60 - 60 * t)}, 95%, ${Math.round(62 - 22 * t)}%)`;
-}
-
 function severityLabelWaste(t) {
   if (t < 0.25) return "Low";
   if (t < 0.5) return "Moderate";
   if (t < 0.75) return "High";
   return "Very High";
+}
+
+function severityLabelAirCountry(metric) {
+  const t = logT(metric, 1.2, 3.6);
+  return t < 0.25 ? "Low" : t < 0.5 ? "Moderate" : t < 0.75 ? "High" : "Severe";
 }
 
 function sevColorFor(metric) {
@@ -233,17 +233,19 @@ function showPanel(d) {
     ? `${fmtInt(d.population)}${d.popEstimated ? ' <span class="est">(est.)</span>' : ""}`
     : "—";
   let rows = "";
-  if (d.countryLevel) {
+  if (d.dataUnavailable && CATEGORY !== "water") {
+    rows = `<div class="row"><span>Area</span><strong>${d.areaKm2.toFixed(0)} km²</strong></div><div class="row"><span>Comparable data</span><strong>Not available</strong></div>`;
+  } else if (d.countryLevel) {
+    const risk = d.managementRisk;
     rows = `
-      <div class="row"><span>Waste per km²</span><strong>${d.metric.toFixed(1)} t/km²/yr</strong></div>
-      <div class="row"><span>Total waste</span><strong>${fmtInt(d.wasteTotal)} t/yr</strong></div>
-      ${d.regionTotal != null ? `<div class="row"><span>${(d.sub || "").split(" — ")[0]} total</span><strong>${fmtInt(d.regionTotal)} t/yr</strong></div>` : ""}
-      ${d.regionAvg != null ? `<div class="row"><span>Region avg density</span><strong>${d.regionAvg.toFixed(1)} t/km²/yr</strong></div>` : ""}
-      <div class="row"><span>Year</span><strong>${d.year}</strong></div>
+      <div class="row"><span>Reported unmanaged share</span><strong>${risk ? `${risk.lowerBound ? "At least " : ""}${(risk.share * 100).toFixed(1)}%` : "Insufficient data"}</strong></div>
+      <div class="row"><span>Waste generated</span><strong>${fmtInt(d.wasteTotal)} t/yr</strong></div>
+      <div class="row"><span>Generation per km²</span><strong>${d.metric.toFixed(1)} t/km²/yr</strong></div>
+      <div class="row"><span>Generation year</span><strong>${d.year}</strong></div>
       <div class="row"><span>Coverage</span><strong>${d.coverage}</strong></div>`;
   } else if (CATEGORY === "water") {
     rows = `
-      <div class="row"><span>${d.indexLabel || "Pollution index"}</span><strong>${d.metric.toFixed(0)} / 100</strong></div>
+      <div class="row"><span>${d.indexLabel || "Pollution index"}</span><strong>${d.dataUnavailable ? "Insufficient data" : `${d.metric.toFixed(0)} / 100`}</strong></div>
       <div class="row"><span>Area</span><strong>${d.areaKm2.toFixed(0)} km²</strong></div>`;
   } else if (CATEGORY === "air") {
     rows = `
@@ -253,29 +255,38 @@ function showPanel(d) {
       <div class="row"><span>Area</span><strong>${d.areaKm2.toFixed(1)} km²</strong></div>`;
   } else {
     rows = `
-      <div class="row"><span>Reports per km²</span><strong>${d.metric.toFixed(1)}</strong></div>
+      <div class="row"><span>${d.real ? "Reports per km²" : "Modeled reporting intensity"}</span><strong>${d.metric.toFixed(1)}</strong></div>
       ${d.real ? `<div class="row"><span>Litter reports (${d.period})</span><strong>${fmtInt(d.reports)}</strong></div>` : ""}
       <div class="row"><span>Population</span><strong>${popLine}</strong></div>
       <div class="row"><span>Area</span><strong>${d.areaKm2.toFixed(1)} km²</strong></div>`;
   }
-  const dataBadge = d.countryLevel
-    ? (d.real
+  const dataBadge = d.dataUnavailable
+    ? `<div class="row estrow"><span>Data</span><strong>Insufficient data</strong></div>`
+    : d.countryLevel
+    ? (d.compilation ? `<div class="row estrow"><span>Data</span><strong>World Bank compilation · source years vary</strong></div>` : d.real
         ? `<div class="row real"><span>Data</span><strong>Official national statistics &middot; ${d.year}</strong></div>`
         : `<div class="row estrow"><span>Data</span><strong>Estimate &middot; ${d.year}</strong></div>`)
     : CATEGORY === "water"
     ? `<div class="row estrow"><span>Data</span><strong>${d.waterDataLabel || "Modeled estimate"}</strong></div>`
+    : CATEGORY === "air"
+      ? `<div class="row estrow"><span>Data</span><strong>${d.real ? "Reported emissions total" : "Modeled emissions"}</strong></div>`
     : d.real
       ? `<div class="row real"><span>Data</span><strong>Real 311 reports &middot; ${d.period}</strong></div>`
       : `<div class="row estrow"><span>Data</span><strong>Modeled estimate</strong></div>`;
   panelBody.innerHTML = `
     <h2>${d.name}</h2>
     <p class="sub">${d.sub}</p>
-    <div class="sev" style="background:${d.countryLevel ? colorLandT(logT(d.metric, WASTE_LOGMIN, WASTE_LOGMAX)) : sevColorFor(d.metric)}">${d.countryLevel ? severityLabelWaste(logT(d.metric, WASTE_LOGMIN, WASTE_LOGMAX)) : severityLabel(d.metric)}</div>
+    <div class="sev" style="background:${d.dataUnavailable ? "#64748b" : d.countryLevel ? (d.managementRisk ? colorLandT(d.managementRisk.t) : "#64748b") : sevColorFor(d.metric)}">${d.dataUnavailable ? "Insufficient data" : d.countryLevel ? (d.managementRisk ? `${severityLabelWaste(d.managementRisk.t)} documented unmanaged share` : "Management data incomplete") : CATEGORY === "land" ? `${d.real ? "Report activity" : "Modeled intensity"}: ${severityLabel(d.metric)}` : severityLabel(d.metric)}</div>
     ${rows}
     ${dataBadge}
     ${d.extra ? `<p class="extra">${d.extra}</p>` : ""}
     <p class="src">${d.source}</p>
   `;
+  if (d.airOverview) {
+    const badge = panelBody.querySelector(".sev");
+    badge.style.background = countryAirOverviewStyle(d.metric, 3).fillColor;
+    badge.textContent = `National emission density: ${severityLabelAirCountry(d.metric)}`;
+  }
   const photo = window.PlanetCityPhotos?.figure(d.name);
   if (photo) panelBody.prepend(photo);
   window.PlanetPanels?.expand("info-panel");
@@ -343,6 +354,20 @@ const airWardPoints = [];               // air smoke wards: [lat, lng, intensity
   airPoints.push([lat, lng, logT(modeledAirMetric(p.country, p.population, p.areaKm2), AIR_LOGMIN, AIR_LOGMAX), p.areaKm2]);
 });
 
+// Global major-city footprints and emission estimates use the same population /
+// national-factor method as the existing Americas cities, not waste-based CO₂.
+(window.PJJ_GLOBAL_CITIES?.features || []).forEach((feature) => {
+  const p = feature.properties;
+  if (p.locationOnly || !p.areaKm2 || !p.population) return;
+  const metric = modeledLandMetric(p.name, p.population, p.areaKm2);
+  buildCityPolygons(feature, p.name, `${p.countryName} — Natural Earth urban footprint`, metric,
+    p.areaKm2, p.population, p.source, "Modeled reporting-pressure proxy from population density, not observed litter. Country management evidence is shown separately.", null, p.country,
+    { populationEstimated: true });
+  const [lng, lat] = p.center;
+  heatPoints.push([lat, lng, logT(metric, LOGMIN, LOGMAX), p.areaKm2]);
+  airPoints.push([lat, lng, logT(modeledAirMetric(p.country, p.population, p.areaKm2), AIR_LOGMIN, AIR_LOGMAX), p.areaKm2]);
+});
+
 function buildCityPolygons(feature, name, sub, landMetric, areaKm2, population, landSource, landExtra, realInfo, country, options = {}) {
   const landPoly = L.geoJSON(feature, { style: () => baseStyleLand(landMetric) }).getLayers()[0];
   landPoly.bindTooltip(
@@ -362,6 +387,7 @@ function buildCityPolygons(feature, name, sub, landMetric, areaKm2, population, 
     });
   });
   cityLayer.addLayer(landPoly);
+  if (options.skipAir) return;
 
   const airMetric = modeledAirMetric(country, population, areaKm2);
   const airPoly = L.geoJSON(feature, { style: () => baseStyleAir(airMetric) }).getLayers()[0];
@@ -421,10 +447,7 @@ function severityLabelWater(idx) {
 }
 
 function severityLabelLand(metric) {
-  if (metric < 2) return "Low";
-  if (metric < 8) return "Moderate";
-  if (metric < 25) return "High";
-  return "Very High";
+  return PlanetWaste.reportingLevel(metric);
 }
 
 function severityLabelAir(metric) {
@@ -474,77 +497,40 @@ waterLakeFeatures.forEach((f) => {
 });
 
 // ---------- World countries (waste by country, land + air categories) ----------
-const WASTE_LOGMIN = 0.6; // ~4 t/km²/yr
-const AIR_C_LOGMIN = 1.8; // country haze: ~63 t CO₂/km²/yr
-const AIR_C_LOGMAX = 3.6; // country haze: ~4,000 t CO₂/km²/yr
-const WASTE_LOGMAX = 4.0; // ~10,000 t/km²/yr
 const WORLD_WASTE = window.PJJ_WORLD_WASTE || {};
+const WASTE_EVIDENCE = window.PJJ_WASTE_EVIDENCE || {};
 const WORLD_AIR = window.PJJ_WORLD_AIR || {};
 const countriesLandLayer = L.layerGroup();
 const countriesAirLayer = L.layerGroup();
 const countriesGreyLayer = L.layerGroup(); // countries with no publicized waste data
-const airCountryPoints = [];
-const REGION_STATS = {};
-
-(function () {
-  const areaByName = {};
-  (window.PJJ_COUNTRIES?.features || []).forEach((f) => {
-    areaByName[f.properties.COUNTRY] = f.properties.area_km2;
-  });
-  Object.entries(WORLD_WASTE).forEach(([name, d]) => {
-    const area = areaByName[name];
-    if (!area) return;
-    const density = d.waste_tonnes / area;
-    const s = (REGION_STATS[d.region] = REGION_STATS[d.region] || { total: 0, count: 0, sumDensity: 0, avgDensity: 0 });
-    s.total += d.waste_tonnes;
-    s.count += 1;
-    s.sumDensity += density;
-  });
-  Object.values(REGION_STATS).forEach((s) => { s.avgDensity = s.sumDensity / s.count; });
-})();
-
-// Countries without a reported CO₂ total: estimate population from their own
-// solid-waste generation (World Bank average ≈ 0.23 t MSW per person per year),
-// then apply a conservative 2.0 t per-capita CO₂ (World Bank low/middle-income
-// average). This keeps low-emission countries low instead of painting them
-// with a dense regional average. Countries with no data at all: negligible.
-function countryCO2(name, areaKm2) {
-  const mt = WORLD_AIR[name];
-  if (mt != null && areaKm2) {
-    return { metric: (mt * 1e6) / areaKm2, real: true, source: "Global Carbon Budget — national fossil CO₂ totals (approx.)" };
-  }
-  const w = WORLD_WASTE[name];
-  if (w && areaKm2) {
-    const popEst = w.waste_tonnes / 0.23;
-    return { metric: (popEst * 2.0) / areaKm2, real: false, source: "Modeled: waste-based population estimate × 2.0 t per-capita CO₂ (World Bank averages)" };
-  }
-  return { metric: 3, real: false, source: "No publicized emissions or waste data — negligible modeled CO₂ density" };
-}
 
 (window.PJJ_COUNTRIES?.features || []).forEach((f) => {
   const name = f.properties.COUNTRY;
   if (name === "Antarctica") return;
-  const d = WORLD_WASTE[name];
+  const evidence = WASTE_EVIDENCE[f.properties.ISO];
+  const d = evidence?.waste_tonnes != null ? {
+    waste_tonnes: evidence.waste_tonnes, year: evidence.year, region: evidence.region,
+    source: evidence.source, coverage: "Municipal solid waste (MSW), reported source year", estimate: true,
+  } : WORLD_WASTE[name];
+  const managementRisk = PlanetWaste.management(evidence);
   const areaKm2 = f.properties.area_km2;
-  const centroid = centroidOf(f.geometry);
 
   if (d && areaKm2) {
     const metric = d.waste_tonnes / areaKm2;
-    const t = logT(metric, WASTE_LOGMIN, WASTE_LOGMAX);
+    const t = managementRisk?.t;
     const style = () => ({
       renderer: canvasRenderer,
       stroke: true,
       color: "rgba(255, 255, 255, 0.4)",
       weight: 0.6,
-      fillColor: colorLandT(t),
-      fillOpacity: 0.75,
+      fillColor: managementRisk ? colorLandT(t) : "#89929b",
+      fillOpacity: managementRisk ? 0.30 : 0.16,
       smoothFactor: 2,
     });
-    const stats = REGION_STATS[d.region];
     const poly = L.geoJSON(f, { style }).getLayers()[0];
     poly.bindTooltip(
-      `<strong>${name}</strong><br>Waste: <strong>${fmtInt(d.waste_tonnes)} t/yr</strong><br>` +
-        `${metric.toFixed(1)} t/km²/yr${d.estimate ? "<br><em>estimate — see source</em>" : ""}`,
+      `<strong>${name}</strong><br>Waste generated: <strong>${fmtInt(d.waste_tonnes)} t/yr</strong><br>` +
+        (managementRisk ? `${managementRisk.lowerBound ? "At least " : ""}${(managementRisk.share * 100).toFixed(1)}% reported unmanaged` : "No comparable management estimate") + "<br><em>Generation is not a street-litter measurement</em>",
       { sticky: true, className: "pjj-tip" }
     );
     poly.on("mouseover", () => poly.setStyle({ ...style(), stroke: true, color: "#fff", weight: 2 }).bringToFront());
@@ -556,37 +542,41 @@ function countryCO2(name, areaKm2) {
         sub: `${d.region} — country waste`,
         metric, metricLabel: "Waste per km²",
         wasteTotal: d.waste_tonnes,
-        regionTotal: stats ? stats.total : null,
-        regionAvg: stats ? stats.avgDensity : null,
         areaKm2, population: null, real: !d.estimate,
         year: d.year, coverage: d.coverage,
-        source: d.source + (d.estimate ? " (estimate)" : ""),
+        source: d.source + (evidence && d.source !== evidence.source ? `; Management evidence: ${evidence.source}` : "") + (d.estimate && !evidence ? " (estimate)" : ""),
         countryLevel: true,
+        compilation: !!evidence,
+        managementRisk,
+        extra: "Country colours show documented open dumping + uncollected waste, not total waste generated per area. Partial reporting is a lower bound; missing categories are not assumed clean. Managed pathways covering at least 98% support a low documented unmanaged share. This is not a direct pollution or street-litter measurement. Observation years and definitions vary.",
       });
     });
     countriesLandLayer.addLayer(poly);
   }
 
-  // Air haze for EVERY country — real totals where published, regional
-  // average model where not. Visible at every zoom level.
-  if (areaKm2) {
-    const co2 = countryCO2(name, areaKm2);
-    const co2T = logT(co2.metric, AIR_C_LOGMIN, AIR_C_LOGMAX);
-    const poly = L.geoJSON(f, { style: () => countryAirStyle(co2T) }).getLayers()[0];
+  // National densities need an overview scale separate from dense urban areas.
+  // Only countries with a reported total receive the national underlay.
+  const co2Mt = WORLD_AIR[name];
+  if (co2Mt && areaKm2) {
+    const co2Tonnes = co2Mt * 1e6;
+    const metric = co2Tonnes / areaKm2;
+    const style = () => countryAirOverviewStyle(metric, map.getZoom());
+    const poly = L.geoJSON(f, { style }).getLayers()[0];
+    poly.emissionsDensity = metric;
     poly.bindTooltip(
       `<strong>${name}</strong><br>` +
-        (co2.real ? `CO₂: <strong>${fmtInt(co2.metric * areaKm2)} t/yr</strong> (Global Carbon Budget)<br>` : "") +
-        `${fmtInt(co2.metric)} t/km²/yr — ${severityLabelAir(co2.metric)}${co2.real ? "" : "<br><em>modeled estimate</em>"}`,
+        `CO₂: <strong>${fmtInt(co2Tonnes)} t/yr</strong> (Global Carbon Budget)<br>` +
+        `${fmtInt(metric)} t/km²/yr — national density: ${severityLabelAirCountry(metric)}`,
       { sticky: true, className: "pjj-tip" }
     );
-    poly.on("mouseover", () => poly.setStyle({ ...countryAirStyle(co2T), stroke: true, color: "#fff", weight: 1.5, fillOpacity: Math.min(0.9, 0.18 + 0.5 * co2T + 0.15) }).bringToFront());
-    poly.on("mouseout", () => poly.setStyle(countryAirStyle(co2T)));
+    poly.on("mouseover", () => poly.setStyle({ ...style(), stroke: true, color: "#ffd600", weight: 1.2, fillOpacity: Math.min(0.45, style().fillOpacity + 0.08) }).bringToFront());
+    poly.on("mouseout", () => poly.setStyle(style()));
     poly.on("click", () => {
       setCategory("air");
       showPanel({
-        name, sub: co2.real ? "Country CO₂ emissions (Global Carbon Budget, ~2023)" : "Country CO₂ — modeled estimate",
-        metric: co2.metric, total: co2.metric * areaKm2, areaKm2, population: null,
-        real: co2.real, period: "~2023", source: co2.source,
+        name, sub: "Country CO₂ emissions (Global Carbon Budget, ~2023)",
+        metric, total: co2Tonnes, areaKm2, population: null, real: true, airOverview: true,
+        period: "~2023", source: "Global Carbon Budget — national fossil CO₂ totals (approx.)",
       });
     });
     countriesAirLayer.addLayer(poly);
@@ -600,7 +590,7 @@ function countryCO2(name, areaKm2) {
       color: "rgba(255, 255, 255, 0.35)",
       weight: 0.6,
       fillColor: "#6b7280",
-      fillOpacity: 0.55,
+      fillOpacity: 0.16,
       smoothFactor: 2,
     });
     const grey = L.geoJSON(f, { style: greyStyle }).getLayers()[0];
@@ -611,7 +601,7 @@ function countryCO2(name, areaKm2) {
       setCategory("land");
       showPanel({
         name, sub: "Country waste", metric: 0, areaKm2,
-        population: null, real: false,
+        population: null, real: false, dataUnavailable: true,
         source: "No publicized waste-generation total could be verified for this country. Shown grey until data is available.",
       });
     });
@@ -619,17 +609,13 @@ function countryCO2(name, areaKm2) {
   }
 });
 
-// Country haze is a POLYGON fill, not a heat kernel: identical visibility at
-// every zoom level, no circles. Intensity drives fill colour + opacity.
-function countryAirStyle(t) {
+function countryAirOverviewStyle(metric, zoom) {
+  const t = logT(metric, 1.2, 3.6); // national densities, not urban 2,000–50,000
+  const fade = zoom <= 4 ? 1 : zoom === 5 ? 0.8 : zoom === 6 ? 0.55 : 0;
   return {
-    renderer: canvasRenderer,
-    stroke: true,
-    color: "rgba(255, 255, 255, 0.25)",
-    weight: 0.6,
-    fillColor: colorAirT(t),
-    fillOpacity: 0.18 + 0.5 * t,
-    smoothFactor: 2,
+    renderer: canvasRenderer, stroke: false, smoothFactor: 2,
+    fillColor: `hsl(${Math.round(58 - 58 * t)}, 95%, ${Math.round(58 - 16 * t)}%)`,
+    fillOpacity: metric > 0 ? (0.12 + 0.23 * t) * fade : 0,
   };
 }
 
@@ -667,9 +653,9 @@ function coastStrength(lat, lng) {
     const d = Math.hypot((lat - hlat) * 111, (lng - hlng) * 111 * Math.cos((lat * Math.PI) / 180));
     if (d < r) hot = Math.max(hot, s * (1 - d / r));
   }
-  // Modeled regional variation, not measured coastal water-quality data. Arctic
-  // offshore areas are treated as very clean; no Arctic hotspot is defined.
-  if (lat > 72) return 0.02;
+  // Missing Arctic observations must not be represented as either polluted or
+  // definitely clean. A neutral, non-numeric display is used above 72°N.
+  if (lat > 72) return null;
   let s = 0.05 + 0.65 * hot;
   s += 0.42 * coastNoise(lat, lng, 0.13) + 0.2 * coastNoise(lat, lng, 0.5);
   return Math.max(0.03, Math.min(1, s));
@@ -690,6 +676,10 @@ function coastRGB(strength) {
 
 // Colour interpolation happens BEFORE the sea-only mask is applied. Neither
 // smoothing nor interpolation can spread the overlay onto the land.
+// Cache geographic bounds once; don't project the entire world for every tile.
+const coastalMaskParts = PlanetWater.polygons(window.PJJ_COAST_MASK?.geometry || { type: "MultiPolygon", coordinates: [] }).map((coordinates) => ({
+  coordinates, box: PlanetWater.bounds({ type: "Polygon", coordinates }),
+}));
 const CoastalGradient = L.GridLayer.extend({
   createTile(coords) {
     const size = this.getTileSize().x;
@@ -697,6 +687,10 @@ const CoastalGradient = L.GridLayer.extend({
     tile.width = tile.height = size;
     const ctx = tile.getContext("2d");
     const origin = L.point(coords.x * size, coords.y * size);
+    // Include a tiny antialiasing fringe at tile edges.
+    const nw = map.unproject(origin.subtract([2, 2]), coords.z), se = map.unproject(origin.add([size + 2, size + 2]), coords.z);
+    const visibleParts = coastalMaskParts.filter(({ box }) => box[0] <= se.lng && box[2] >= nw.lng && box[1] <= nw.lat && box[3] >= se.lat);
+    if (!visibleParts.length) return tile;
     const step = 8;
     const samples = size / step + 3;
     const field = document.createElement("canvas");
@@ -706,7 +700,8 @@ const CoastalGradient = L.GridLayer.extend({
     for (let y = 0; y < samples; y++) {
       for (let x = 0; x < samples; x++) {
         const ll = map.unproject(origin.add([(x - 1) * step, (y - 1) * step]), coords.z);
-        const rgb = coastRGB(coastStrength(ll.lat, ll.lng));
+        const strength = coastStrength(ll.lat, ll.lng);
+        const rgb = strength === null ? [119, 146, 161] : coastRGB(strength);
         const offset = (y * samples + x) * 4;
         image.data.set([...rgb, 184], offset);
       }
@@ -716,9 +711,7 @@ const CoastalGradient = L.GridLayer.extend({
     ctx.drawImage(field, -step * 1.5, -step * 1.5, samples * step, samples * step);
     ctx.globalCompositeOperation = "destination-in";
     ctx.beginPath();
-    const geometry = window.PJJ_COAST_MASK.geometry;
-    const polygons = geometry.type === "Polygon" ? [geometry.coordinates] : geometry.coordinates;
-    for (const polygon of polygons) {
+    for (const { coordinates: polygon } of visibleParts) {
       for (const ring of polygon) {
         ring.forEach(([lng, lat], i) => {
           const p = map.project([lat, lng], coords.z).subtract(origin);
@@ -788,7 +781,7 @@ function buildCoastBands() {
     pane.style.pointerEvents = "none";
   }
   const gradient = new CoastalGradient({
-    pane: "coastalGradient", tileSize: 256, bounds: [[-58, -170], [84, -10]],
+    pane: "coastalGradient", tileSize: 256, bounds: [[-60, -180], [84, 180]],
     noWrap: true, updateWhenIdle: true,
   });
   const outline = L.geoJSON(window.PJJ_COAST_MASK, {
@@ -805,11 +798,12 @@ function buildCoastBands() {
       layer.bindTooltip(`<strong>${name}</strong><br>Click for modeled water-pollution data`, { sticky: true, className: "pjj-tip" });
       layer.on("click", (event) => {
         const point = event.latlng || L.latLng(seed[1], seed[0]);
+        const strength = coastStrength(point.lat, point.lng);
         showPanel({
           name, sub: "Coastal water region · up to 130 km offshore",
-          metric: coastStrength(point.lat, point.lng) * 100, indexLabel: "Index at selected point",
+          metric: strength === null ? null : strength * 100, dataUnavailable: strength === null, indexLabel: "Index at selected point",
           areaKm2, population: null, real: false, waterDataLabel: "Modeled coastal index",
-          extra: `Selected point: ${point.lat.toFixed(4)}, ${point.lng.toFixed(4)}. This illustrative index matches the colour model, not measured water samples. Region boundaries are map-analysis areas, not official water-management districts.`,
+          extra: strength === null ? "No comparable Arctic water-quality observations are available in this map. Neutral colour means insufficient data, not clean water." : `Selected point: ${point.lat.toFixed(4)}, ${point.lng.toFixed(4)}. This illustrative index matches the colour model, not measured water samples. Region boundaries are map-analysis areas, not official water-management districts.`,
           source: "Geometry: Natural Earth coastline, buffered and clipped to sea only. Index: modeled hotspot proximity and regional variation; no live water-quality measurements are available.",
         });
       });
@@ -961,25 +955,24 @@ function buildGlow(points, gradient, areaMult, maxOpacity) {
   if (zoom >= DETAIL_ZOOM - 1 && CATEGORY !== "air") return;
   const mpp = (156543.03392 * Math.cos((map.getCenter().lat * Math.PI) / 180)) / Math.pow(2, zoom);
   const isAir = CATEGORY === "air";
-  // Log-area bucketing, but for AIR the kernel radius is FIXED IN PIXELS
-  // (scaled from region area once, never recomputed from zoom). The haze looks
-  // identical zoomed out and zoomed in — constant size, constant opacity.
-  const buckets = {};
+  // Air kernels stay at a modest pixel size at EVERY zoom. Scaling them from
+  // metres-per-pixel brought the giant circular blobs back at city/street zooms.
+  const buckets = isAir ? { small: [], medium: [], large: [] } : {};
   points.forEach(([lat, lng, i, km2]) => {
-    const key = clamp(Math.floor(Math.log10(Math.max(km2, 10))), 2, 8);
+    const key = isAir ? (km2 >= 800 ? "large" : km2 >= 150 ? "medium" : "small") : clamp(Math.floor(Math.log10(Math.max(km2, 10))), 2, 8);
     (buckets[key] = buckets[key] || []).push([lat, lng, i, km2]);
   });
   const radii = {};
   Object.keys(buckets).forEach((k) => {
     radii[k] = isAir
-      ? clamp(Math.sqrt(Math.pow(10, Number(k) + 0.5)) * 0.9, 10, 90)
+      ? ({ small: 12, medium: 18, large: 24 })[k]
       : heatRadiusPx(Math.pow(10, Number(k) + 0.5), mpp, areaMult, 200);
   });
   Object.keys(buckets).forEach((k) => {
     if (!buckets[k].length) return;
     const layer = L.heatLayer(buckets[k].map((p) => [p[0], p[1], p[2]]), {
       radius: radii[k],
-      blur: isAir ? Math.max(8, radii[k] * 0.55) : Math.max(12, radii[k] * 0.85),
+      blur: isAir ? Math.max(12, radii[k] * 0.9) : Math.max(12, radii[k] * 0.85),
       // NOTE: leaflet.heat scales every point's intensity by
       // 1 / 2^(maxZoom - zoom). With maxZoom pinned to 18 that factor hit
       // 1/4096 at low zoom and pushed every point under minOpacity, so the
@@ -995,6 +988,7 @@ function buildGlow(points, gradient, areaMult, maxOpacity) {
     if (layer._canvas) {
       layer._canvas.style.pointerEvents = "none";
       layer._canvas.style.opacity = "1"; // constant smoke presence at all zooms
+      if (isAir) layer._canvas.classList.add("air-smoke-layer");
     }
   });
 }
@@ -1011,10 +1005,9 @@ function rebuildGlows() {
   heatLayers.forEach((l) => map.removeLayer(l));
   heatLayers = [];
   if (CATEGORY === "air") {
-    // Country haze is carried by the polygon fills (countriesAirLayer) at every
-    // zoom. City-level smoke kernels render at EVERY zoom too, with fixed
-    // pixel size and opacity, so the detail never disappears zoomed out.
-    buildGlow(airPoints.concat(airWardPoints), AIR_GRADIENT, 1.0, 0.45);
+    // City evidence remains visible at overview zooms too. National totals use
+    // the separately scaled geographic underlay, never giant centroid kernels.
+    buildGlow(airPoints.concat(airWardPoints), AIR_GRADIENT, 1.6, 0.6);
     return;
   }
   if (CATEGORY === "land") buildGlow(heatPoints, LAND_GRADIENT, 1.15, maxOpacityForZoom(map.getZoom()));
@@ -1026,7 +1019,7 @@ const legendMax = document.getElementById("legend-max");
 const legendGradient = document.getElementById("legend-gradient");
 
 const LEGENDS = {
-  land: { min: "Low", max: "High", css: "linear-gradient(to right, #ffd600, #ff8f00, #d50000)" },
+  land: { min: "Lower", max: "Higher", css: "linear-gradient(to right, #ffd600, #ff8f00, #d50000)" },
   water: { min: "Clean (dark blue)", max: "Polluted (orange)", css: "linear-gradient(to right, #0d1e6e, #3c3a80, #8a3d72, #ff8c1a, #ffb14d)" },
   air: { min: "Clear", max: "Smoky (high CO₂)", css: "linear-gradient(to right, rgba(255,235,0,0), #ffe100, #ff9600, #ff3d00, #c62828)" },
 };
@@ -1036,9 +1029,13 @@ function updateLegend() {
   legendMin.textContent = L.min;
   legendMax.textContent = L.max;
   legendGradient.style.background = L.css;
+  document.getElementById("legend-note").textContent = CATEGORY === "land"
+    ? "Countries: documented unmanaged MSW share. Cities: reporting intensity. These are different indicators, not a direct pollution ranking. Grey means insufficient comparable evidence."
+    : CATEGORY === "water" ? "Illustrative coastal/lake indices, not live samples. Neutral Arctic water means insufficient data." : "Reported national CO₂ underlay and city/ward emission estimates. Separate overview scaling keeps haze visible. Not measured ambient air quality.";
 }
 
 function setCategory(cat) {
+  if (CATEGORY !== cat) panel.classList.remove("open");
   CATEGORY = cat;
   document.querySelectorAll(".cat-option").forEach((b) =>
     b.classList.toggle("active", b.dataset.cat === cat)
@@ -1080,8 +1077,10 @@ function applyCategory() {
     coastBandLayers.forEach((l) => map.addLayer(l));
     map.addLayer(lakesLayer); // lakes on top of the sea-side coastal bands
   } else if (CATEGORY === "air") {
-    // Country haze polygons are ALWAYS visible (any zoom level).
-    map.addLayer(countriesAirLayer);
+    if (map.getZoom() <= 6) {
+      countriesAirLayer.eachLayer((layer) => layer.setStyle(countryAirOverviewStyle(layer.emissionsDensity, map.getZoom())));
+      map.addLayer(countriesAirLayer);
+    }
     if (!worldView) {
       map.addLayer(airCityLayer);
       if (map.getZoom() >= DETAIL_ZOOM - 1) map.addLayer(markhamAirLayer);
@@ -1112,7 +1111,7 @@ document.getElementById("open-funding").addEventListener("click", () => {
   const body = document.getElementById("funding-body");
   const data = window.PJJ_FUNDING || {};
   body.innerHTML =
-    `<p class="funding-note">Environmental organizations across all provinces and territories — potential cleanup partners and sponsors.</p>` +
+    `<p class="funding-note">Environmental NGOs and community partners across all provinces and territories — potential cleanup partners and sponsors.</p>` +
     Object.entries(data).map(([prov, orgs]) =>
       `<h3>${prov}</h3>` + orgs.map(([name, url]) =>
         `<a href="${url}" target="_blank" rel="noopener noreferrer">${name}</a>`).join("")

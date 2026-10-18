@@ -1,5 +1,22 @@
 # PROJECT V3 FINAL - PLANET-SWEEPER
 
+## Current global update
+
+See [DATA_NOTES.md](DATA_NOTES.md) for the current interpretation, sources, and
+limitations. Country waste colours now use documented unmanaged municipal-waste
+shares from the World Bank's March 2026 *What a Waste 3.0* compilation, rather than
+ranking incompatible total-waste figures per area. City reporting intensity is a
+different metric and is labeled separately. Country fills are more transparent.
+
+Major-city waste coverage adds 2,308 reference city locations / 1,967 urban
+footprints outside the existing Americas data, including the Middle East. The
+global coastal layer has 496 analysis regions, with Americas geometry retained;
+the water basemap retains its original dark navy look. Arctic no-data
+areas are neutral, not assigned a made-up cleanliness score. Air now has separately
+scaled overview haze so national data and city smoke remain visible zoomed out,
+without waste-derived emission estimates. Potential Funding uses
+the wording **environmental NGOs**.
+
 PlanetSweeper is an interactive environmental map made using ArcGIS, providing visuals for littering and pollution frequencies around the world.
 Our model allows users to report local littering hotspots and request volunteer help.
 
@@ -83,7 +100,10 @@ the wider sea mask with `node scripts/gen_coast.js`, then
 1. Find a city or Toronto district, then select **Set as your city**.
    Browsing a different city does not replace your saved city until you confirm.
 2. Choose **Report a hotspot**, then **Search an address** or **Pick on the map**.
-   The map option uses a normal crosshair cursor; you can also use its centre.
+   Reporting starts in map-placement mode with the user's Broomie artwork as the
+   cursor. His cut-out limbs swing with damped springs; the small reticle marks
+   the exact click location. Address search and the map-centre option remain
+   available. Nearby-location selection still uses a normal crosshair.
 3. Adjust the draggable pin, add your display name/role, description, optional photos,
    and a target number of volunteers. Save the report locally.
 4. Open **Volunteer nearby**. Use your saved city or choose a specific address/map
@@ -96,7 +116,7 @@ messages are stored in this browser's `localStorage`, not sent to other voluntee
 They survive reloads on the same origin, but will not appear on another device or
 domain. Matching tabs on the same browser/origin refresh through storage events.
 Display names are not verified identities. The interface labels these limits.
-Saved and draft hotspot pins use a plain solid-teal teardrop with a white dot;
+Saved and draft hotspot pins use a plain solid-teal teardrop with a plus sign;
 a dashed white border distinguishes a draggable draft. Zoom controls live in the
 bottom-left corner. Address lookup includes American countries/territories, and
 nearby search supports radii up to 500 km without device geolocation.
@@ -115,6 +135,22 @@ preference. Address/map search origins are session-only. GPS is not used.
 Photos are limited to three images, resized to 800 px and re-encoded as JPEG;
 they are never uploaded. Storage errors are shown rather than silently dropping
 reports. Keep real personal or sensitive information out of this prototype.
+
+### Broomie cursor
+
+The image supplied by the user is retained in `assets/broomie/original.png`.
+`node scripts/prepare_broomie.js` creates transparent PNG cutouts from the same
+artwork (not a redraw). Body, arms/broom/bag, and legs animate independently with
+bounded angular springs. Reduced-motion preferences disable the wobble; touch
+users tap the map with a static Broomie preview rather than an invisible cursor.
+The cursor restores on placement, address mode, Escape, close, pointer exit, and
+window/tab blur. It never captures pointer events or blocks controls/dragging.
+Broomie's limbs use loose, independent bag/broom lag and leg swings, while the
+body stays steady. Mouse velocity is smoothed to avoid twitching. He sits close
+and level with the pointer; tooltip checks are throttled and keep the chosen side
+when a tooltip closes, instead of continuously hopping around UI panels. The
+exact-click reticle never shifts. Coastline rendering also skips off-tile geometry
+instead of projecting the whole world for every tile; gradients/data are unchanged.
 
 ### City photos
 

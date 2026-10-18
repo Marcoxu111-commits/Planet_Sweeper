@@ -13,7 +13,7 @@
     if (seen.has(key)) return;
     seen.add(key);
     const aliases = feature.properties?.aliases || [];
-    entries.push({ feature, name, region, key: `${key} ${normalize(aliases.join(" "))}`, normalizedName: normalize(name) });
+    entries.push({ feature, name, region, key: `${key} ${normalize(aliases.join(" "))}`, normalizedName: normalize(name), population: feature.properties?.population || feature.properties?.Population || 0 });
   }
   (window.PJJ_GTA_REGIONS?.features || []).forEach((f) => add(f, f.properties.name, "Ontario, Canada"));
   (window.PJJ_GTA_DETAIL?.features || []).forEach((f) => add(f, f.properties.name, `${f.properties.city}, Ontario, Canada`));
@@ -27,6 +27,7 @@
   });
   (window.PJJ_US_CITIES?.features || []).forEach((f) => add(f, f.properties.NAME.replace(/--/g, " – "), "USA"));
   (window.PJJ_AMERICAS_CITIES?.features || []).forEach((f) => add(f, f.properties.name, f.properties.countryName));
+  (window.PJJ_GLOBAL_CITIES?.features || []).forEach((f) => add(f, f.properties.name, f.properties.countryName));
 
   let matches = [], active = -1, preview = null, home = null;
   const cityName = (entry) => {
@@ -100,7 +101,7 @@
     matches = entries.filter((e) => query.split(" ").every((word) => e.key.includes(word)))
       .sort((a, b) => {
         const score = (e) => e.normalizedName === query ? 0 : e.normalizedName.startsWith(query) ? 1 : 2;
-        return score(a) - score(b) || a.name.localeCompare(b.name);
+        return score(a) - score(b) || b.population - a.population || a.name.localeCompare(b.name);
       }).slice(0, 8);
     list.replaceChildren();
     active = -1;
