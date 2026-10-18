@@ -669,7 +669,7 @@ body {
 
 /* ---------- Navy-scale basemap (water category) ---------- */
 #map.navy .leaflet-tile-pane {
-  filter: brightness(0.42) contrast(1.15) sepia(1) hue-rotate(180deg) saturate(2.6);
+  filter: brightness(0.55) contrast(1.5);
 }
 
 /* ---------- Funding panel ---------- */
